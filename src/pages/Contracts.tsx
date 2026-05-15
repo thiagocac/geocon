@@ -11,9 +11,21 @@ import { Card } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
 import { Button } from '../components/ui/Button';
 import { Empty, ErrorState, Skeleton } from '../components/ui/Stat';
+import { SavedFiltersBar, useDefaultPreset } from '../components/filters/SavedFiltersBar';
+
+interface ContractsFilters {
+  search: string;
+  status: string;
+}
+
 export function Contracts() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  useDefaultPreset<ContractsFilters>('contracts', (f) => {
+    if (f.search !== undefined) setSearch(String(f.search));
+    if (f.status !== undefined) setStatusFilter(String(f.status));
+  });
 
   const { data = [], isLoading, isError, error } = useQuery({
     queryKey: ['contracts'],
@@ -49,6 +61,18 @@ export function Contracts() {
           </Link>
         }
       />
+
+      <div className="mb-3">
+        <SavedFiltersBar<ContractsFilters>
+          pageKey="contracts"
+          currentFilters={{ search, status: statusFilter }}
+          hasActiveFilters={!!search || statusFilter !== 'all'}
+          onApply={(f) => {
+            setSearch(String(f.search ?? ''));
+            setStatusFilter(String(f.status ?? 'all'));
+          }}
+        />
+      </div>
 
       <Card className="mb-4 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center">

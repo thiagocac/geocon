@@ -1,7 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
 import {
   Home, Layers, FolderTree, Bell, Users, LogOut, ShieldCheck, ChevronDown,
-  Briefcase, BookOpen, ClipboardList, PieChart, BarChart3, History, Mail,
+  Briefcase, BookOpen, ClipboardList, PieChart, BarChart3, History, Mail, Megaphone,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -32,6 +32,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/contratos/workflows',  label: 'Workflows',    icon: ShieldCheck, roles: ['admin'] },
   { to: '/admin/auditoria',            label: 'Auditoria',    icon: History,     roles: ['admin'] },
   { to: '/admin/digests',              label: 'Digests',      icon: Mail,        roles: ['admin'] },
+  { to: '/admin/broadcast',            label: 'Broadcasts',   icon: Megaphone,   roles: ['admin'] },
   { to: '/admin/backlog',              label: 'Backlog',      icon: BookOpen,    roles: ['admin'] },
 ];
 

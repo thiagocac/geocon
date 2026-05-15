@@ -4506,3 +4506,190 @@ export async function listDigestsDailyStats(days = 30): Promise<DigestDailyStat[
   fail(r.error);
   return (r.data || []) as DigestDailyStat[];
 }
+
+// =============================================================================
+// Bulk SOV operations (V16)
+// =============================================================================
+
+export interface BulkResult {
+  affected: number;
+  requested: number;
+  skipped?: number;
+  blocked_locked?: number;
+  blocked_measured?: number;
+}
+
+export async function bulkLockItems(item_ids: string[], lock: boolean, motivo?: string): Promise<BulkResult> {
+  if (SKIP_AUTH) return { affected: item_ids.length, requested: item_ids.length };
+  checkSupabase();
+  const r = await supabase.rpc('bulk_lock_items', { p_item_ids: item_ids, p_lock: lock, p_motivo: motivo || null });
+  fail(r.error);
+  return r.data as BulkResult;
+}
+
+export async function bulkSetDiscipline(item_ids: string[], discipline_id: string | null): Promise<BulkResult> {
+  if (SKIP_AUTH) return { affected: item_ids.length, requested: item_ids.length };
+  checkSupabase();
+  const r = await supabase.rpc('bulk_set_discipline', { p_item_ids: item_ids, p_discipline_id: discipline_id });
+  fail(r.error);
+  return r.data as BulkResult;
+}
+
+export async function bulkAdjustPrices(item_ids: string[], factor: number, motivo: string): Promise<BulkResult> {
+  if (SKIP_AUTH) return { affected: item_ids.length, requested: item_ids.length, blocked_locked: 0, blocked_measured: 0 };
+  checkSupabase();
+  const r = await supabase.rpc('bulk_adjust_prices', { p_item_ids: item_ids, p_factor: factor, p_motivo: motivo });
+  fail(r.error);
+  return r.data as BulkResult;
+}
+
+export async function bulkSoftDeleteItems(item_ids: string[], motivo: string): Promise<BulkResult> {
+  if (SKIP_AUTH) return { affected: item_ids.length, requested: item_ids.length };
+  checkSupabase();
+  const r = await supabase.rpc('bulk_soft_delete_items', { p_item_ids: item_ids, p_motivo: motivo });
+  fail(r.error);
+  return r.data as BulkResult;
+}
+
+// =============================================================================
+// Notifications broadcast (V17)
+// =============================================================================
+
+export interface BroadcastPreview {
+  total: number;
+  with_email: number;
+  by_role: Record<string, number>;
+}
+
+export interface BroadcastFilter {
+  filter_roles?: string[];
+  filter_member_ids?: string[];
+  filter_contract_id?: string;
+}
+
+export interface BroadcastResult {
+  broadcast_id: string;
+  total_sent: number;
+}
+
+export interface BroadcastHistoryRow {
+  id: string;
+  tenant_id: string;
+  sender_id: string;
+  sender_nome: string | null;
+  sender_email: string | null;
+  title: string;
+  body: string;
+  kind: string;
+  action_url: string | null;
+  filter_roles: string[] | null;
+  filter_member_ids: string[] | null;
+  filter_contract_id: string | null;
+  contract_numero: string | null;
+  contract_objeto: string | null;
+  scope: 'all' | 'role' | 'specific' | 'contract';
+  total_sent: number;
+  total_failed: number;
+  email_also: boolean;
+  created_at: string;
+}
+
+export async function previewBroadcastRecipients(filter: BroadcastFilter): Promise<BroadcastPreview> {
+  if (SKIP_AUTH) {
+    return {
+      total: filter.filter_contract_id ? 5 : (filter.filter_roles?.includes('admin') ? 2 : 12),
+      with_email: filter.filter_contract_id ? 4 : (filter.filter_roles?.includes('admin') ? 2 : 11),
+      by_role: { admin: 2, gestor_contrato: 4, fiscal_contrato: 3, viewer: 3 },
+    };
+  }
+  checkSupabase();
+  const r = await supabase.rpc('preview_broadcast_recipients', {
+    p_filter_roles: filter.filter_roles || null,
+    p_filter_member_ids: filter.filter_member_ids || null,
+    p_filter_contract_id: filter.filter_contract_id || null,
+  });
+  fail(r.error);
+  return r.data as BroadcastPreview;
+}
+
+export async function bulkSendNotification(input: {
+  title: string;
+  body: string;
+  kind?: string;
+  action_url?: string;
+  filter_roles?: string[];
+  filter_member_ids?: string[];
+  filter_contract_id?: string;
+}): Promise<BroadcastResult> {
+  if (SKIP_AUTH) {
+    return { broadcast_id: 'mock-bc', total_sent: input.filter_contract_id ? 5 : 12 };
+  }
+  checkSupabase();
+  const r = await supabase.rpc('bulk_send_notification', {
+    p_title: input.title,
+    p_body: input.body,
+    p_kind: input.kind || 'info',
+    p_action_url: input.action_url || null,
+    p_filter_roles: input.filter_roles || null,
+    p_filter_member_ids: input.filter_member_ids || null,
+    p_filter_contract_id: input.filter_contract_id || null,
+  });
+  fail(r.error);
+  return r.data as BroadcastResult;
+}
+
+export async function listBroadcastsHistory(limit = 50): Promise<BroadcastHistoryRow[]> {
+  if (SKIP_AUTH) {
+    const now = Date.now();
+    return Array.from({ length: 8 }).map((_, i) => ({
+      id: `bc-${i}`, tenant_id: 't1', sender_id: 'm1',
+      sender_nome: ['Thiago Vieira', 'Eduardo Vargas'][i % 2],
+      sender_email: 'admin@consultegeo.org',
+      title: ['Manutenção programada: domingo 14h–16h', 'Nova diretriz de medição', 'Treinamento obrigatório', 'Alteração de fluxo aprovação'][i % 4],
+      body: 'Comunicado interno da administração.',
+      kind: 'info',
+      action_url: null,
+      filter_roles: i % 3 === 0 ? null : ['gestor_contrato', 'fiscal_contrato'],
+      filter_member_ids: null,
+      filter_contract_id: i === 2 ? 'c-mock-1' : null,
+      contract_numero: i === 2 ? 'CT 045/2024' : null,
+      contract_objeto: i === 2 ? 'Pavimentação urbana – Lote A' : null,
+      scope: (i === 2 ? 'contract' : (i % 3 === 0 ? 'all' : 'role')) as 'all' | 'role' | 'contract',
+      total_sent: 8 + i * 2,
+      total_failed: 0,
+      email_also: i % 4 === 0,
+      created_at: new Date(now - i * 86400_000).toISOString(),
+    }));
+  }
+  checkSupabase();
+  const r = await supabase
+    .from('v_notification_broadcasts_history')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  fail(r.error);
+  return (r.data || []) as BroadcastHistoryRow[];
+}
+
+// =============================================================================
+// Dispatch broadcast emails (V18)
+// =============================================================================
+
+export interface BroadcastEmailStats {
+  total: number;
+  sent: number;
+  skipped_pref: number;
+  skipped_quiet: number;
+  failed: number;
+}
+
+export async function dispatchBroadcastEmails(broadcast_id: string): Promise<{ email_stats: BroadcastEmailStats; broadcast_id?: string; note?: string }> {
+  if (SKIP_AUTH) {
+    return { broadcast_id, email_stats: { total: 12, sent: 9, skipped_pref: 2, skipped_quiet: 1, failed: 0 } };
+  }
+  checkSupabase();
+  const { data, error } = await supabase.functions.invoke('dispatch-broadcast-emails', { body: { broadcast_id } });
+  if (error) throw new Error(humanizeError(error));
+  if (!data?.ok) throw new Error(data?.error || 'Falha ao disparar e-mails');
+  return data;
+}

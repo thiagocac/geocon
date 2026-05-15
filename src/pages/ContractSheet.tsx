@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { Plus, Upload, Lock, Layers } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { listItems, listSovVersions } from '../lib/api';
 import { brl, num, dt } from '../lib/format';
 import { Layout } from '../components/layout/Layout';
@@ -9,9 +10,17 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Empty, ErrorState, Skeleton } from '../components/ui/Stat';
+import { SovBulkActionsBar } from '../components/sov/SovBulkActionsBar';
+import { SovBulkOperationModal } from '../components/sov/SovBulkOperationModal';
+
+type BulkOp = 'lock' | 'unlock' | 'set_discipline' | 'adjust_prices' | 'soft_delete';
 
 export function ContractSheet() {
   const { id = '' } = useParams();
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOp, setBulkOp] = useState<BulkOp | null>(null);
+
   const { data: items = [], isLoading, isError, error } = useQuery({
     queryKey: ['items', id],
     queryFn: () => listItems(id),
@@ -26,6 +35,23 @@ export function ContractSheet() {
   const totalContratado = items.reduce((s, i) => s + i.quantidade_contratada * i.preco_unitario, 0);
   const totalMedido = items.reduce((s, i) => s + i.quantidade_medida_acumulada * i.preco_unitario, 0);
   const activeVersion = versions.find((v) => v.status === 'vigente');
+
+  // Multi-select helpers
+  const allSelected = items.length > 0 && selected.size === items.length;
+  const someSelected = selected.size > 0 && selected.size < items.length;
+
+  function toggleAll() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(items.map((i) => i.id)));
+  }
+  function toggleOne(itemId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
 
   return (
     <Layout>
@@ -110,6 +136,16 @@ export function ContractSheet() {
             <table className="table">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                      onChange={toggleAll}
+                      className="h-4 w-4 cursor-pointer rounded border-slate-300"
+                      aria-label="Selecionar todos"
+                    />
+                  </th>
                   <th>Código</th>
                   <th>Descrição</th>
                   <th className="text-center">Un.</th>
@@ -123,8 +159,18 @@ export function ContractSheet() {
               <tbody>
                 {items.map((i) => {
                   const saldo = i.quantidade_contratada + i.quantidade_aditada - i.quantidade_medida_acumulada;
+                  const isSel = selected.has(i.id);
                   return (
-                    <tr key={i.id} className="hover:bg-slate-50 dark:hover:bg-muted-dark">
+                    <tr key={i.id} className={`hover:bg-slate-50 dark:hover:bg-muted-dark ${isSel ? 'bg-magenta-50/30 dark:bg-magenta-900/10' : ''}`}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={isSel}
+                          onChange={() => toggleOne(i.id)}
+                          className="h-4 w-4 cursor-pointer rounded border-slate-300"
+                          aria-label={`Selecionar ${i.codigo}`}
+                        />
+                      </td>
                       <td className="font-mono text-xs">{i.codigo}</td>
                       <td>
                         <p className="font-medium text-slate-900 dark:text-slate-100">{i.descricao}</p>
@@ -151,6 +197,27 @@ export function ContractSheet() {
           </div>
         </Card>
       )}
+
+      <SovBulkActionsBar
+        count={selected.size}
+        onLock={() => setBulkOp('lock')}
+        onUnlock={() => setBulkOp('unlock')}
+        onSetDiscipline={() => setBulkOp('set_discipline')}
+        onAdjustPrices={() => setBulkOp('adjust_prices')}
+        onSoftDelete={() => setBulkOp('soft_delete')}
+        onClear={() => setSelected(new Set())}
+      />
+
+      <SovBulkOperationModal
+        op={bulkOp}
+        itemIds={Array.from(selected)}
+        contractId={id}
+        onClose={() => setBulkOp(null)}
+        onSuccess={() => {
+          setSelected(new Set());
+          qc.invalidateQueries({ queryKey: ['items', id] });
+        }}
+      />
     </Layout>
   );
 }

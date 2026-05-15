@@ -95,6 +95,7 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: 'adm-workflows', label: 'Workflows',    hint: '', group: 'Administração', icon: ShieldCheck,  to: '/admin/contratos/workflows',  roleGuard: ['admin'] },
       { id: 'adm-audit',     label: 'Auditoria',    hint: '', group: 'Administração', icon: History,      to: '/admin/auditoria',            roleGuard: ['admin'] },
       { id: 'adm-digests',   label: 'Digests',      hint: 'Histórico do digest diário', group: 'Administração', icon: History, to: '/admin/digests', roleGuard: ['admin'] },
+      { id: 'adm-broadcast', label: 'Broadcasts',   hint: 'Notificação em massa',       group: 'Administração', icon: History, to: '/admin/broadcast', roleGuard: ['admin'] },
       { id: 'adm-backlog',   label: 'Backlog',      hint: '', group: 'Administração', icon: BookOpen,     to: '/admin/backlog',              roleGuard: ['admin'] },
     ];
 

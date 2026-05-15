@@ -12,9 +12,12 @@ import { Button } from '../../components/ui/Button';
 import { Empty, Skeleton } from '../../components/ui/Stat';
 import { Modal } from '../../components/ui/Modal';
 import { Field, Select } from '../../components/ui/FormField';
+import { AdminListPage } from '../../components/patterns/AdminListPage';
 
 export function AdminUsers() {
-  const { data = [], isLoading } = useQuery({
+  const [search, setSearch] = useState('');
+
+  const { data = [], isLoading, error } = useQuery({
     queryKey: ['admin', 'members'],
     queryFn: async () => {
       if (!hasSupabase) return [];
@@ -29,25 +32,38 @@ export function AdminUsers() {
     },
   });
 
+  const filtered = search
+    ? data.filter((m: any) => {
+        const q = search.toLowerCase();
+        return (m.nome || '').toLowerCase().includes(q)
+          || (m.email || '').toLowerCase().includes(q)
+          || (m.role || '').toLowerCase().includes(q);
+      })
+    : data;
+
   return (
-    <Layout>
-      <PageHeader
-        kicker="Administração · Backlog"
-        title="Usuários e papéis"
-        subtitle="Gestão de membros do tenant, papéis e permissões por produto"
-        actions={<Button><Plus className="h-4 w-4" />Convidar usuário</Button>}
-      />
-      {isLoading && <Card className="p-6"><Skeleton className="h-48" /></Card>}
-      {!isLoading && data.length === 0 && <Empty title="Sem usuários" />}
-      {data.length > 0 && (
-        <Card className="overflow-hidden">
-          <table className="table">
-            <thead><tr><th>Nome</th><th>E-mail</th><th>Tenant</th><th>Papel</th><th>Roles</th><th>Ativo</th></tr></thead>
-            <tbody>
-              {data.map((m: any) => (
-                <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-muted-dark">
-                  <td className="font-medium">{m.nome}</td>
-                  <td className="text-sm text-slate-500 dark:text-slate-400">{m.email}</td>
+    <AdminListPage
+      kicker="Administração · Membros"
+      title="Usuários e papéis"
+      subtitle="Gestão de membros do tenant, papéis e permissões por produto"
+      actions={<Button><Plus className="h-4 w-4" />Convidar usuário</Button>}
+      searchTerm={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Buscar por nome, e-mail ou papel…"
+      loading={isLoading}
+      error={error as Error | null}
+      isEmpty={!isLoading && filtered.length === 0}
+      emptyTitle={search ? 'Nenhum membro encontrado' : 'Sem usuários'}
+      emptyBody={search ? 'Refine a busca.' : 'Nenhum membro cadastrado neste tenant.'}
+    >
+      <Card className="overflow-hidden">
+        <table className="table">
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Tenant</th><th>Papel</th><th>Roles</th><th>Ativo</th></tr></thead>
+          <tbody>
+            {filtered.map((m: any) => (
+              <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-muted-dark">
+                <td className="font-medium">{m.nome}</td>
+                <td className="text-sm text-slate-500 dark:text-slate-400">{m.email}</td>
                   <td className="text-xs">{m.tenants?.nome || '—'}</td>
                   <td><Badge tone="purple">{m.role}</Badge></td>
                   <td className="text-xs text-slate-500 dark:text-slate-400">
@@ -59,13 +75,13 @@ export function AdminUsers() {
             </tbody>
           </table>
         </Card>
-      )}
-    </Layout>
+    </AdminListPage>
   );
 }
 
 export function AdminTenants() {
-  const { data = [], isLoading } = useQuery({
+  const [search, setSearch] = useState('');
+  const { data = [], isLoading, error } = useQuery({
     queryKey: ['admin', 'tenants'],
     queryFn: async () => {
       if (!hasSupabase) return [];
@@ -74,33 +90,47 @@ export function AdminTenants() {
       return data || [];
     },
   });
+
+  const filtered = search
+    ? data.filter((t: any) => {
+        const q = search.toLowerCase();
+        return (t.nome || '').toLowerCase().includes(q)
+          || (t.cnpj || '').toLowerCase().includes(q)
+          || (t.id || '').toLowerCase().includes(q);
+      })
+    : data;
+
   return (
-    <Layout>
-      <PageHeader
-        title="Tenants"
-        subtitle="Espelho local dos tenants vindos do identity hub"
-        actions={<Button variant="outline">Sincronizar identity</Button>}
-      />
-      {isLoading && <Skeleton className="h-32" />}
-      {!isLoading && data.length === 0 && <Empty title="Sem tenants cadastrados" body="Sincronize com o identity hub." />}
-      {data.length > 0 && (
-        <Card className="overflow-hidden">
-          <table className="table">
-            <thead><tr><th>Nome</th><th>CNPJ</th><th>Ativo</th><th>ID</th></tr></thead>
-            <tbody>
-              {data.map((t: any) => (
-                <tr key={t.id}>
-                  <td className="font-medium">{t.nome}</td>
-                  <td className="text-xs">{t.cnpj || '—'}</td>
-                  <td>{t.ativo ? <Badge tone="green">Ativo</Badge> : <Badge tone="slate">Inativo</Badge>}</td>
-                  <td className="font-mono text-xs text-slate-400">{t.id}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-    </Layout>
+    <AdminListPage
+      kicker="Administração · Tenants"
+      title="Tenants"
+      subtitle="Espelho local dos tenants vindos do identity hub"
+      actions={<Button variant="outline">Sincronizar identity</Button>}
+      searchTerm={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Buscar por nome, CNPJ ou ID…"
+      loading={isLoading}
+      error={error as Error | null}
+      isEmpty={!isLoading && filtered.length === 0}
+      emptyTitle={search ? 'Nenhum tenant encontrado' : 'Sem tenants cadastrados'}
+      emptyBody={search ? 'Refine a busca.' : 'Sincronize com o identity hub.'}
+    >
+      <Card className="overflow-hidden">
+        <table className="table">
+          <thead><tr><th>Nome</th><th>CNPJ</th><th>Ativo</th><th>ID</th></tr></thead>
+          <tbody>
+            {filtered.map((t: any) => (
+              <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-muted-dark">
+                <td className="font-medium">{t.nome}</td>
+                <td className="text-xs">{t.cnpj || '—'}</td>
+                <td>{t.ativo ? <Badge tone="green">Ativo</Badge> : <Badge tone="slate">Inativo</Badge>}</td>
+                <td className="font-mono text-xs text-slate-400">{t.id}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </AdminListPage>
   );
 }
 

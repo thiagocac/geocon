@@ -39,6 +39,16 @@ export function Financial() {
     },
   });
 
+  const snapshotAge = snapshot?.generated_at
+    ? Math.floor((Date.now() - new Date(snapshot.generated_at).getTime()) / 60000)
+    : null;
+  const ageLabel = snapshotAge === null ? '—'
+    : snapshotAge < 1   ? 'agora'
+    : snapshotAge < 60  ? `há ${snapshotAge} min`
+    : snapshotAge < 1440 ? `há ${Math.floor(snapshotAge / 60)}h`
+    : `há ${Math.floor(snapshotAge / 1440)} dias`;
+  const isStale = (snapshotAge || 0) > 60; // > 1h
+
   return (
     <Layout>
       <PageHeader
@@ -47,11 +57,47 @@ export function Financial() {
         subtitle="Curva S, snapshots, retenções, glosas, pagamentos e forecasts"
         backTo={`/contratos/${id}`} backLabel="Contrato"
         actions={
-          <Button variant="outline" onClick={() => recalc.mutate()} loading={recalc.isPending}>
-            <RefreshCw className="h-4 w-4" />Recalcular snapshot
-          </Button>
+          <div className="flex items-center gap-2">
+            {snapshot && (
+              <div className="text-right">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-display text-slate-500 dark:text-slate-400">
+                  Snapshot
+                </p>
+                <p className={`text-xs ${isStale ? 'text-amber-600' : 'text-slate-500'} dark:text-slate-300`}>
+                  {ageLabel}
+                  {isStale && <span className="ml-1">⚠</span>}
+                </p>
+              </div>
+            )}
+            <Button
+              variant={isStale ? 'primary' : 'outline'}
+              onClick={() => recalc.mutate()}
+              loading={recalc.isPending}
+              title="Recalcula o snapshot financeiro a partir de medições, pagamentos e aditivos atuais"
+            >
+              <RefreshCw className="h-4 w-4" />Recalcular
+            </Button>
+          </div>
         }
       />
+
+      {recalc.isSuccess && (
+        <Card className="mb-4 flex items-start gap-3 border-success/30 bg-success/5 p-3">
+          <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+          <div className="flex-1 text-sm">
+            <p className="font-medium text-success">Snapshot recalculado</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Valores foram reagregados a partir de medições aprovadas, pagamentos e aditivos vigentes.
+            </p>
+          </div>
+        </Card>
+      )}
+      {recalc.isError && (
+        <Card className="mb-4 flex items-start gap-3 border-error/30 bg-error/5 p-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" />
+          <p className="flex-1 text-sm text-error">Falha ao recalcular: {(recalc.error as Error).message}</p>
+        </Card>
+      )}
 
       {(loadingContract || loadingSnap) && <Skeleton className="h-32" />}
 

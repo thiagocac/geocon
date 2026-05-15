@@ -98,6 +98,23 @@ function fmtValue(v: Json): { display: string; mono: boolean } {
   return { display: String(v), mono: false };
 }
 
+/* Detecta uma chave de identidade num array de objetos.
+ * Tenta na ordem: id, codigo, contract_item_id, additive_item_id, item_id, sku. */
+function detectArrayKey(arr: unknown[]): string | null {
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  if (!arr.every((it) => it && typeof it === 'object' && !Array.isArray(it))) return null;
+  const candidates = ['id', 'codigo', 'contract_item_id', 'additive_item_id', 'item_id', 'sku', 'documento_id'];
+  for (const k of candidates) {
+    if (arr.every((it) => k in (it as Record<string, unknown>))) return k;
+  }
+  return null;
+}
+
+function isObjectArray(v: Json): v is Array<Record<string, unknown>> {
+  return Array.isArray(v) && v.length > 0 &&
+         v.every((it) => it && typeof it === 'object' && !Array.isArray(it));
+}
+
 function deepEqual(a: Json, b: Json): boolean {
   if (a === b) return true;
   if (typeof a !== typeof b) return false;
@@ -186,19 +203,31 @@ export function AuditDiff({ before, after, metadata }: Props) {
                 const beforeFmt = fmtValue(d.before);
                 const afterFmt  = fmtValue(d.after);
                 const badge = KIND_BADGE[d.kind];
+                const isArr = d.kind === 'changed' && isObjectArray(d.before) && isObjectArray(d.after);
                 return (
                   <tr key={d.field} className={KIND_BG[d.kind]}>
                     <td className="px-3 py-1.5 align-top font-medium text-slate-700 dark:text-slate-200">
                       {FIELD_LABEL[d.field] || d.field}
                       <p className="font-mono text-[10px] text-slate-400">{d.field}</p>
                     </td>
-                    <td className={`px-3 py-1.5 align-top ${d.kind === 'added' ? 'text-slate-400' : 'text-error'} ${beforeFmt.mono ? 'font-mono' : ''}`}>
-                      {d.kind === 'added' ? <span className="italic">—</span> : beforeFmt.display}
-                    </td>
-                    <td className="px-1 text-center align-top text-slate-400">→</td>
-                    <td className={`px-3 py-1.5 align-top ${d.kind === 'removed' ? 'text-slate-400' : 'text-success'} ${afterFmt.mono ? 'font-mono' : ''}`}>
-                      {d.kind === 'removed' ? <span className="italic">—</span> : afterFmt.display}
-                    </td>
+                    {isArr ? (
+                      <td colSpan={3} className="px-3 py-1.5 align-top">
+                        <ArrayDiffTable
+                          before={d.before as Array<Record<string, unknown>>}
+                          after={d.after as Array<Record<string, unknown>>}
+                        />
+                      </td>
+                    ) : (
+                      <>
+                        <td className={`px-3 py-1.5 align-top ${d.kind === 'added' ? 'text-slate-400' : 'text-error'} ${beforeFmt.mono ? 'font-mono' : ''}`}>
+                          {d.kind === 'added' ? <span className="italic">—</span> : beforeFmt.display}
+                        </td>
+                        <td className="px-1 text-center align-top text-slate-400">→</td>
+                        <td className={`px-3 py-1.5 align-top ${d.kind === 'removed' ? 'text-slate-400' : 'text-success'} ${afterFmt.mono ? 'font-mono' : ''}`}>
+                          {d.kind === 'removed' ? <span className="italic">—</span> : afterFmt.display}
+                        </td>
+                      </>
+                    )}
                     <td className="px-2 py-1.5 align-top">
                       <span className={`inline-block whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-medium ${badge.tone}`}>{badge.label}</span>
                     </td>
@@ -221,6 +250,110 @@ export function AuditDiff({ before, after, metadata }: Props) {
             </pre>
           </div>
         </details>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ArrayDiffTable — renderiza diff por linha quando before/after são arrays de
+ * objetos com chave de identidade detectável. Caso contrário, mostra resumo.
+ */
+function ArrayDiffTable({ before, after }: { before: Array<Record<string, unknown>>; after: Array<Record<string, unknown>> }) {
+  const key = detectArrayKey([...before, ...after]);
+
+  if (!key) {
+    return (
+      <div className="rounded border border-slate-200 bg-white p-2 text-[11px] text-slate-600 dark:border-border-dark dark:bg-card-dark dark:text-slate-300">
+        Lista de {before.length} → {after.length} itens · chave não identificável, mostrando contagem apenas
+      </div>
+    );
+  }
+
+  // Indexar por chave
+  const beforeMap = new Map<string, Record<string, unknown>>();
+  const afterMap = new Map<string, Record<string, unknown>>();
+  before.forEach((it) => beforeMap.set(String(it[key]), it));
+  after.forEach((it) => afterMap.set(String(it[key]), it));
+
+  const allKeys = Array.from(new Set([...beforeMap.keys(), ...afterMap.keys()]));
+
+  const rows: Array<{ key: string; type: 'added' | 'removed' | 'changed' | 'unchanged'; before?: Record<string, unknown>; after?: Record<string, unknown>; changedFields?: string[] }> = [];
+  for (const k of allKeys) {
+    const b = beforeMap.get(k);
+    const a = afterMap.get(k);
+    if (b && !a) {
+      rows.push({ key: k, type: 'removed', before: b });
+    } else if (!b && a) {
+      rows.push({ key: k, type: 'added', after: a });
+    } else if (b && a) {
+      // Comparar campos
+      const changedFields: string[] = [];
+      const fieldSet = new Set([...Object.keys(b), ...Object.keys(a)]);
+      for (const f of fieldSet) {
+        if (f === key) continue;
+        if (!deepEqual(b[f], a[f])) changedFields.push(f);
+      }
+      if (changedFields.length > 0) {
+        rows.push({ key: k, type: 'changed', before: b, after: a, changedFields });
+      } else {
+        rows.push({ key: k, type: 'unchanged', before: b, after: a });
+      }
+    }
+  }
+
+  const visible = rows.filter((r) => r.type !== 'unchanged');
+  const counts = {
+    added:   rows.filter((r) => r.type === 'added').length,
+    removed: rows.filter((r) => r.type === 'removed').length,
+    changed: rows.filter((r) => r.type === 'changed').length,
+    unchanged: rows.filter((r) => r.type === 'unchanged').length,
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-display text-slate-500 dark:text-slate-400">
+        <span>Lista por <span className="text-navy dark:text-purple-300">{key}</span>:</span>
+        {counts.added > 0    && <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-800 dark:bg-green-900/40 dark:text-green-200">+{counts.added}</span>}
+        {counts.changed > 0  && <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200">~{counts.changed}</span>}
+        {counts.removed > 0  && <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-800 dark:bg-red-900/40 dark:text-red-200">−{counts.removed}</span>}
+        {counts.unchanged > 0 && <span className="text-slate-400">={counts.unchanged}</span>}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="text-xs italic text-slate-500">Sem alterações relevantes nos itens</p>
+      ) : (
+        <ul className="space-y-1">
+          {visible.slice(0, 20).map((r) => {
+            const icon = r.type === 'added' ? '＋' : r.type === 'removed' ? '−' : '~';
+            const cls = r.type === 'added' ? 'border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-900/15'
+                      : r.type === 'removed' ? 'border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/15'
+                      : 'border-yellow-200 bg-yellow-50 dark:border-yellow-900/40 dark:bg-yellow-900/15';
+            const it = r.after || r.before || {};
+            const descricao = it.descricao || it.nome || it.title || '';
+            return (
+              <li key={r.key} className={`rounded border px-2 py-1 text-[11px] ${cls}`}>
+                <div className="flex items-start gap-1.5">
+                  <span className="font-mono font-bold">{icon}</span>
+                  <div className="flex-1">
+                    <p className="font-mono text-[10px] text-slate-600 dark:text-slate-300">{String(r.key)}</p>
+                    {descricao ? <p className="dark:text-slate-200">{String(descricao).slice(0, 100)}</p> : null}
+                    {r.type === 'changed' && r.changedFields && (
+                      <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                        Campos: {r.changedFields.map((f) => FIELD_LABEL[f] || f).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+          {visible.length > 20 && (
+            <li className="text-center text-[10px] italic text-slate-500">
+              + {visible.length - 20} itens adicionais ocultos
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );

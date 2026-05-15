@@ -48,6 +48,7 @@ const CRUMB_LABELS: Record<string, string> = {
   workflows: 'Workflows',
   auditoria: 'Auditoria',
   digests: 'Digests',
+  broadcast: 'Broadcasts',
   backlog: 'Backlog',
   notifications: 'Notificações',
   notificacoes: 'Preferências de notificação',

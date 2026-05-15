@@ -22,10 +22,10 @@ const TONE_BAR: Record<NonNullable<StatProps['tone']>, string> = {
 
 export function Stat({ label, value, sub, tone = 'neutral', icon }: StatProps) {
   return (
-    <Card className="overflow-hidden p-4">
+    <Card className="overflow-hidden p-4" densityAware>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-display text-slate-500 dark:text-slate-400">{label}</p>
           <p className="mt-2 text-2xl font-bold text-slate-900 tabular dark:text-slate-100">{value}</p>
           {sub && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
         </div>

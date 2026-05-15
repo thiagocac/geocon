@@ -41,6 +41,7 @@ import { AdminPrograms } from './pages/admin/Programs';
 import { AdminDisciplines } from './pages/admin/Disciplines';
 import { AdminAuditLog } from './pages/admin/AuditLog';
 import { AdminDigests } from './pages/admin/Digests';
+import { AdminBroadcast } from './pages/admin/Broadcast';
 import { Additives } from './pages/Additives';
 import { UnforeseenList, UnforeseenDetail } from './pages/UnforeseenItems';
 import { MeasurementApprovePage } from './pages/MeasurementApprovePage';
@@ -125,6 +126,7 @@ export function App() {
         <Route path="/admin/disciplines"         element={<P roles={['admin', 'gestor_contrato']}><AdminDisciplines /></P>} />
         <Route path="/admin/auditoria"           element={<P roles={['admin']}><AdminAuditLog /></P>} />
         <Route path="/admin/digests"             element={<P roles={['admin']}><AdminDigests /></P>} />
+        <Route path="/admin/broadcast"           element={<P roles={['admin']}><AdminBroadcast /></P>} />
         <Route path="/admin/backlog"             element={<P roles={['admin']}><Backlog /></P>} />
 
         {/* 404 fallback */}

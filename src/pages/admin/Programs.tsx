@@ -5,73 +5,79 @@ import {
   listPrograms, upsertProgram, deleteProgram, type Program,
 } from '../../lib/api';
 import { humanizeError } from '../../lib/errors';
-import { Layout } from '../../components/layout/Layout';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Field } from '../../components/ui/FormField';
-import { Empty, Skeleton } from '../../components/ui/Stat';
+import { AdminListPage } from '../../components/patterns/AdminListPage';
 
 export function AdminPrograms() {
   const qc = useQueryClient();
   const { data: programs = [], isLoading } = useQuery({ queryKey: ['programs'], queryFn: listPrograms });
   const [editing, setEditing] = useState<Program | 'new' | null>(null);
+  const [search, setSearch] = useState('');
 
   const remove = useMutation({
     mutationFn: deleteProgram,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['programs'] }),
   });
 
+  const filtered = search
+    ? programs.filter((p) => {
+        const q = search.toLowerCase();
+        return p.nome.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q) ||
+               (p.orgao || '').toLowerCase().includes(q);
+      })
+    : programs;
+
   return (
-    <Layout>
-      <PageHeader
-        kicker="Administração · Programas"
-        title="Programas"
-        subtitle="Programas governamentais ou linhas de financiamento. Contratos vinculados a um programa aparecem agrupados na Visão por programa."
-        backTo="/dashboard" backLabel="Dashboard"
-        actions={<Button onClick={() => setEditing('new')}><Plus className="h-4 w-4" />Novo programa</Button>}
-      />
-
-      {isLoading && <Card className="p-6"><Skeleton className="h-64" /></Card>}
-      {!isLoading && programs.length === 0 && (
-        <Empty title="Nenhum programa cadastrado" body="Cadastre programas para agrupar contratos por linha de financiamento ou objetivo." />
-      )}
-
-      {programs.length > 0 && (
-        <Card className="overflow-hidden">
-          <table className="table">
-            <thead><tr>
-              <th>Código</th><th>Nome</th><th>Órgão</th><th>Fonte</th><th>Status</th><th />
-            </tr></thead>
-            <tbody>
-              {programs.map((p) => (
-                <tr key={p.id}>
-                  <td className="font-mono text-xs">{p.codigo}</td>
-                  <td>
-                    <div className="font-medium dark:text-slate-100">{p.nome}</div>
-                    {p.descricao && <div className="text-xs text-slate-500 truncate max-w-md">{p.descricao}</div>}
-                  </td>
-                  <td>{p.orgao || '—'}</td>
-                  <td>{p.funding_source || '—'}</td>
-                  <td>{p.active ? <Badge tone="green">Ativo</Badge> : <Badge tone="slate">Inativo</Badge>}</td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <button type="button" onClick={() => setEditing(p)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy dark:hover:bg-muted-dark">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button type="button" onClick={() => { if (confirm(`Excluir programa "${p.nome}"?`)) remove.mutate(p.id); }} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-error dark:hover:bg-muted-dark">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
+    <AdminListPage
+      kicker="Administração · Programas"
+      title="Programas"
+      subtitle="Programas governamentais ou linhas de financiamento. Contratos vinculados a um programa aparecem agrupados na Visão por programa."
+      backTo="/dashboard"
+      backLabel="Dashboard"
+      actions={<Button onClick={() => setEditing('new')}><Plus className="h-4 w-4" />Novo programa</Button>}
+      searchTerm={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Buscar por nome, código ou órgão…"
+      loading={isLoading}
+      isEmpty={!isLoading && filtered.length === 0}
+      emptyTitle={search ? 'Nenhum programa encontrado' : 'Nenhum programa cadastrado'}
+      emptyBody={search ? 'Refine o termo da busca.' : 'Cadastre programas para agrupar contratos por linha de financiamento ou objetivo.'}
+    >
+      <Card className="overflow-hidden">
+        <table className="table">
+          <thead><tr>
+            <th>Código</th><th>Nome</th><th>Órgão</th><th>Fonte</th><th>Status</th><th />
+          </tr></thead>
+          <tbody>
+            {filtered.map((p) => (
+              <tr key={p.id}>
+                <td className="font-mono text-xs">{p.codigo}</td>
+                <td>
+                  <div className="font-medium dark:text-slate-100">{p.nome}</div>
+                  {p.descricao && <div className="text-xs text-slate-500 truncate max-w-md">{p.descricao}</div>}
+                </td>
+                <td>{p.orgao || '—'}</td>
+                <td>{p.funding_source || '—'}</td>
+                <td>{p.active ? <Badge tone="green">Ativo</Badge> : <Badge tone="slate">Inativo</Badge>}</td>
+                <td className="text-right">
+                  <div className="flex justify-end gap-1">
+                    <button type="button" onClick={() => setEditing(p)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy dark:hover:bg-muted-dark">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => { if (confirm(`Excluir programa "${p.nome}"?`)) remove.mutate(p.id); }} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-error dark:hover:bg-muted-dark">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
 
       {editing && (
         <ProgramEditModal
@@ -80,7 +86,7 @@ export function AdminPrograms() {
           onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ['programs'] }); }}
         />
       )}
-    </Layout>
+    </AdminListPage>
   );
 }
 
