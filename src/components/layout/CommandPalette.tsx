@@ -84,6 +84,7 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: 'nav-grds',       label: 'Distribuição (GRDs)',      hint: 'Guia de remessa', group: 'Navegação', icon: FolderTree,  to: '/ged/distribuicao' },
       { id: 'nav-taxonomia',  label: 'Taxonomia GED',            hint: 'Categorias e metadados', group: 'Navegação', icon: BookOpen, to: '/ged/categorias' },
       { id: 'nav-notif',      label: 'Notificações',             hint: '', group: 'Navegação', icon: History, to: '/notifications' },
+      { id: 'nav-notif-prefs', label: 'Preferências de notificação', hint: 'Evento × canal',  group: 'Navegação', icon: ShieldCheck, to: '/me/notificacoes' },
     ];
 
     const adminItems: PaletteItem[] = [
@@ -93,6 +94,7 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: 'adm-disc',      label: 'Disciplinas',  hint: '', group: 'Administração', icon: Layers,       to: '/admin/disciplines',          roleGuard: ['admin', 'gestor_contrato'] },
       { id: 'adm-workflows', label: 'Workflows',    hint: '', group: 'Administração', icon: ShieldCheck,  to: '/admin/contratos/workflows',  roleGuard: ['admin'] },
       { id: 'adm-audit',     label: 'Auditoria',    hint: '', group: 'Administração', icon: History,      to: '/admin/auditoria',            roleGuard: ['admin'] },
+      { id: 'adm-digests',   label: 'Digests',      hint: 'Histórico do digest diário', group: 'Administração', icon: History, to: '/admin/digests', roleGuard: ['admin'] },
       { id: 'adm-backlog',   label: 'Backlog',      hint: '', group: 'Administração', icon: BookOpen,     to: '/admin/backlog',              roleGuard: ['admin'] },
     ];
 

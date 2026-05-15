@@ -12,6 +12,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Empty, Skeleton } from '../components/ui/Stat';
+import { SavedFiltersBar, useDefaultPreset } from '../components/filters/SavedFiltersBar';
 
 const PENDENCIA_META: Record<Pendencia['pendencia_tipo'], { label: string; icon: JSX.Element; linkBase: (p: Pendencia) => string }> = {
   medicao_aprovacao:  { label: 'Aprovação de medição', icon: <FileCheck    className="h-4 w-4 text-blue-700 dark:text-blue-300" />,
@@ -30,9 +31,20 @@ const SEVERIDADE_TONE: Record<string, 'slate' | 'yellow' | 'red'> = {
   high:   'red',
 };
 
+interface PendenciasFilters {
+  tipo: Pendencia['pendencia_tipo'] | '';
+  severidade: 'low' | 'medium' | 'high' | '';
+}
+
 export function Pendencias() {
   const [filterTipo, setFilterTipo] = useState<Pendencia['pendencia_tipo'] | ''>('');
   const [filterSeveridade, setFilterSeveridade] = useState<'low' | 'medium' | 'high' | ''>('');
+
+  // Aplica preset default automaticamente ao montar
+  useDefaultPreset<PendenciasFilters>('pendencias', (f) => {
+    if (f.tipo !== undefined) setFilterTipo(f.tipo);
+    if (f.severidade !== undefined) setFilterSeveridade(f.severidade);
+  });
 
   const { data: all = [], isLoading } = useQuery({
     queryKey: ['pendencias'],
@@ -61,9 +73,22 @@ export function Pendencias() {
   return (
     <Layout>
       <PageHeader
+        kicker="Operação · SLA"
         title="Pendências e SLAs"
         subtitle="Tudo o que requer atenção: medições atrasadas, GRDs sem confirmação, itens não previstos parados e contratos em risco"
       />
+
+      <div className="mb-3">
+        <SavedFiltersBar<PendenciasFilters>
+          pageKey="pendencias"
+          currentFilters={{ tipo: filterTipo, severidade: filterSeveridade }}
+          hasActiveFilters={!!filterTipo || !!filterSeveridade}
+          onApply={(f) => {
+            setFilterTipo((f.tipo as Pendencia['pendencia_tipo']) ?? '');
+            setFilterSeveridade((f.severidade as 'low' | 'medium' | 'high') ?? '');
+          }}
+        />
+      </div>
 
       {/* KPIs */}
       <div className="mb-4 grid gap-3 md:grid-cols-4">

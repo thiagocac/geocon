@@ -10,17 +10,31 @@ import { SKIP_AUTH } from '../../lib/supabase';
 
 const CRUMB_LABELS: Record<string, string> = {
   dashboard: 'Carteira',
+  carteira: 'Carteira agregada',
+  pendencias: 'Pendências',
+  aprovacoes: 'Minhas aprovações',
   contratos: 'Contratos',
   medicoes: 'Medições',
   planilha: 'Planilha',
+  versoes: 'Versões',
+  obras: 'Obras / lotes',
+  partes: 'Partes',
   aditivos: 'Aditivos',
   'itens-nao-previstos': 'Itens não previstos',
   rastreamento: 'Rastreamento',
   financeiro: 'Financeiro',
   cronograma: 'Cronograma',
+  eap: 'EAP',
   relatorios: 'Relatórios',
+  risco: 'Análise de risco',
   memoria: 'Memória',
   aprovar: 'Aprovar',
+  novo: 'Novo',
+  editar: 'Editar',
+  importar: 'Importar',
+  'nova-revisao': 'Nova revisão',
+  termos: 'Termos',
+  nova: 'Nova',
   ged: 'GED/DataBook',
   categorias: 'Categorias',
   documentos: 'Documento',
@@ -28,10 +42,14 @@ const CRUMB_LABELS: Record<string, string> = {
   admin: 'Admin',
   users: 'Usuários',
   tenants: 'Tenants',
+  programs: 'Programas',
+  disciplines: 'Disciplinas',
   workflows: 'Workflows',
   auditoria: 'Auditoria',
+  digests: 'Digests',
   backlog: 'Backlog',
   notifications: 'Notificações',
+  notificacoes: 'Preferências de notificação',
   me: 'Meu perfil',
 };
 
@@ -85,6 +103,11 @@ export function Topbar({ onMenuClick }: Props) {
   return (
     <>
       <header className={`fixed left-0 right-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur dark:border-border-dark dark:bg-card-dark/95 lg:left-64 lg:px-8 ${SKIP_AUTH ? 'top-6' : 'top-0'}`}>
+        {/* Brand gradient accent strip — DS prescreve marca visível no app shell */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-navy via-purple to-magenta"
+        />
         <div className="flex items-center gap-3">
           <button
             type="button"

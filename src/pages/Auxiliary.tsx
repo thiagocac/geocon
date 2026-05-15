@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { User, Bell, CheckCircle2, ExternalLink, ShieldCheck, AlertCircle, Briefcase } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from '../lib/api';
@@ -14,6 +14,17 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Empty, Skeleton, ErrorState } from '../components/ui/Stat';
 import type { PublicValidationRecord } from '../lib/types';
+
+const ENTITY_TYPE_LABEL: Record<string, string> = {
+  measurement: 'Boletim de medição',
+  additive: 'Termo aditivo',
+  grd: 'Guia de remessa de documentos',
+  ged_document: 'Documento do GED',
+  unforeseen_item: 'Item não previsto',
+  risk_analysis: 'Análise de risco contratual',
+  audit_package: 'Pacote de auditoria',
+  contract: 'Contrato',
+};
 
 // =============================================================================
 // ME
@@ -47,7 +58,12 @@ export function Me() {
             {member.empresa && (<div><dt className="text-xs uppercase text-slate-500 dark:text-slate-400">Empresa</dt><dd>{member.empresa}</dd></div>)}
             {member.crea_numero && (<div><dt className="text-xs uppercase text-slate-500 dark:text-slate-400">CREA</dt><dd>{member.crea_numero}/{member.crea_uf}</dd></div>)}
           </dl>
-          <Button variant="outline" className="mt-5" onClick={() => signOut()}>Sair</Button>
+          <div className="mt-5 flex gap-2">
+            <Link to="/me/notificacoes">
+              <Button variant="outline"><Bell className="h-4 w-4" />Notificações</Button>
+            </Link>
+            <Button variant="outline" onClick={() => signOut()}>Sair</Button>
+          </div>
         </Card>
 
         <Card className="p-5">
@@ -102,7 +118,14 @@ export function Notifications() {
       <PageHeader
         title="Notificações"
         subtitle={`${unread} não lidas · ${data.length} totais`}
-        actions={unread > 0 ? <Button variant="outline" onClick={() => markAll.mutate()} loading={markAll.isPending}>Marcar todas como lidas</Button> : null}
+        actions={
+          <>
+            <Link to="/me/notificacoes">
+              <Button variant="outline">Preferências</Button>
+            </Link>
+            {unread > 0 && <Button variant="outline" onClick={() => markAll.mutate()} loading={markAll.isPending}>Marcar todas como lidas</Button>}
+          </>
+        }
       />
       {isLoading && <Card className="p-6"><Skeleton className="h-48" /></Card>}
       {isError && <ErrorState message={(error as Error).message} />}
@@ -214,10 +237,13 @@ export function PublicValidation() {
             {data && (
               <>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">{data.title}</h3>
+                {data.entity_type === 'risk_analysis' && (
+                  <RiskSummaryBadge metadata={data.metadata} />
+                )}
                 <dl className="mt-4 space-y-3 text-sm">
                   <div>
                     <dt className="text-xs uppercase text-slate-500 dark:text-slate-400">Tipo</dt>
-                    <dd className="font-medium">{data.entity_type}</dd>
+                    <dd className="font-medium">{ENTITY_TYPE_LABEL[data.entity_type] || data.entity_type}</dd>
                   </div>
                   <div>
                     <dt className="text-xs uppercase text-slate-500 dark:text-slate-400">Emitido em</dt>
@@ -249,6 +275,31 @@ export function PublicValidation() {
           Site oficial: <a className="underline" href={SITE_URL}>{SITE_URL}</a>
         </p>
       </div>
+    </div>
+  );
+}
+
+const RISK_NIVEL_CLS: Record<string, string> = {
+  critico:   'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
+  atencao:   'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200',
+  monitorar: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
+  estavel:   'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
+};
+
+const RISK_NIVEL_LABEL: Record<string, string> = {
+  critico: 'CRÍTICO', atencao: 'ATENÇÃO', monitorar: 'MONITORAR', estavel: 'ESTÁVEL',
+};
+
+function RiskSummaryBadge({ metadata }: { metadata: Record<string, unknown> }) {
+  const score = typeof metadata?.score === 'number' ? metadata.score : null;
+  const nivel = typeof metadata?.nivel === 'string' ? metadata.nivel : null;
+  if (score === null && !nivel) return null;
+  const cls = nivel ? RISK_NIVEL_CLS[nivel] || RISK_NIVEL_CLS.estavel : RISK_NIVEL_CLS.estavel;
+  return (
+    <div className={`mt-3 inline-flex items-center gap-3 rounded-lg px-4 py-2 ${cls}`}>
+      {score !== null && <span className="font-mono text-2xl font-bold tabular">{score}</span>}
+      {nivel && <span className="text-sm font-bold uppercase tracking-wider">{RISK_NIVEL_LABEL[nivel] || nivel}</span>}
+      <span className="text-xs opacity-70">no momento da emissão</span>
     </div>
   );
 }

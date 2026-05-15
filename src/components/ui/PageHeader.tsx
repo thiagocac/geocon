@@ -1,16 +1,18 @@
 import type { ReactNode } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Kicker } from './Kicker';
 
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
+  kicker?: string;
   actions?: ReactNode;
   backTo?: string;
   backLabel?: string;
 }
 
-export function PageHeader({ title, subtitle, actions, backTo, backLabel }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, kicker, actions, backTo, backLabel }: PageHeaderProps) {
   return (
     <div className="mb-6">
       {backTo && (
@@ -24,6 +26,7 @@ export function PageHeader({ title, subtitle, actions, backTo, backLabel }: Page
       )}
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
         <div>
+          {kicker && <Kicker className="mb-1.5">{kicker}</Kicker>}
           <h1 className="page-title">{title}</h1>
           {subtitle && <p className="page-subtitle">{subtitle}</p>}
         </div>

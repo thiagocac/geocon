@@ -37,6 +37,7 @@ export function Contracts() {
   return (
     <Layout>
       <PageHeader
+        kicker="Operação · Carteira"
         title="Contratos"
         subtitle="Cadastro contratual, obras/lotes, partes, prazos e valores"
         actions={

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, MapPin, Plus, ShieldCheck, WalletCards, LineChart, ClipboardList, Briefcase, PieChart, TrendingUp } from 'lucide-react';
-import { listContracts, getPendencias, getTenantSummary, getPortfolioByProgram } from '../lib/api';
+import { AlertTriangle, MapPin, Plus, ShieldCheck, WalletCards, LineChart, ClipboardList, Briefcase, PieChart, TrendingUp, ShieldAlert } from 'lucide-react';
+import { listContracts, getPendencias, getTenantSummary, getPortfolioByProgram, listTopCriticalContracts, getTenantRiskTrend, type TopCriticalContract, type TenantRiskTrendPoint } from '../lib/api';
 import { brl, num } from '../lib/format';
 import { CONTRACT_STATUS, statusFor } from '../lib/status';
 import { Layout } from '../components/layout/Layout';
@@ -25,6 +25,12 @@ export function Dashboard() {
   const { data: portfolio = [] } = useQuery({
     queryKey: ['portfolio-by-program'], queryFn: getPortfolioByProgram,
   });
+  const { data: criticos = [] } = useQuery({
+    queryKey: ['top-critical-contracts'], queryFn: () => listTopCriticalContracts(5),
+  });
+  const { data: riskTrend = [] } = useQuery({
+    queryKey: ['tenant-risk-trend'], queryFn: () => getTenantRiskTrend(30),
+  });
 
   const total = data.reduce((s, c) => s + c.valor_atual, 0);
   const medido = data.reduce((s, c) => s + c.valor_medido_acumulado, 0);
@@ -37,6 +43,7 @@ export function Dashboard() {
   return (
     <Layout>
       <PageHeader
+        kicker="Visão executiva · multi-tenant"
         title="Carteira de contratos"
         subtitle="Visão executiva consolidada por órgão, programa e município"
         actions={
@@ -170,6 +177,59 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* V9/V11: Top contratos críticos + Tendência de risco */}
+      {(criticos.length > 0 || riskTrend.length > 1) && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {criticos.length > 0 && (
+            <Card className="p-5 lg:col-span-2">
+              <header className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                    <ShieldAlert className="h-5 w-5 text-error" />
+                    Contratos críticos
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Ranqueados por score composto
+                  </p>
+                </div>
+                <Badge tone="red">{criticos.length}</Badge>
+              </header>
+              <ul className="space-y-2">
+                {criticos.map((c) => <CriticoRow key={c.id} c={c} />)}
+              </ul>
+            </Card>
+          )}
+          {riskTrend.length > 1 && (
+            <Card className="p-5">
+              <header className="mb-3">
+                <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                  <LineChart className="h-5 w-5 text-purple" />
+                  Tendência de risco
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Score médio do portfólio · {riskTrend.length} dia(s)
+                </p>
+              </header>
+              <PortfolioRiskTrend data={riskTrend} />
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border-dark dark:bg-muted-dark">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">Hoje</p>
+                  <p className="font-mono text-xl font-semibold tabular dark:text-slate-100">
+                    {riskTrend[riskTrend.length - 1]?.avg_score ?? '—'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-error/30 bg-error/5 p-2">
+                  <p className="text-[10px] uppercase tracking-wider text-error">Críticos hoje</p>
+                  <p className="font-mono text-xl font-semibold tabular text-error">
+                    {riskTrend[riskTrend.length - 1]?.high_count ?? 0}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
       {/* Painel V3: Top programas + Distribuição de pendências */}
       {(topPrograms.length > 0 || pendencias.length > 0) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -245,5 +305,89 @@ export function Dashboard() {
         </div>
       )}
     </Layout>
+  );
+}
+
+const NIVEL_TONE: Record<TopCriticalContract['nivel'], 'red' | 'yellow' | 'blue' | 'green'> = {
+  critico: 'red', atencao: 'yellow', monitorar: 'blue', estavel: 'green',
+};
+const NIVEL_LABEL: Record<TopCriticalContract['nivel'], string> = {
+  critico: 'Crítico', atencao: 'Atenção', monitorar: 'Monitorar', estavel: 'Estável',
+};
+
+function CriticoRow({ c }: { c: TopCriticalContract }) {
+  const reasons: string[] = [];
+  if (c.score_avanco === 30) reasons.push('avanço ≥ 95%');
+  else if (c.score_avanco === 15) reasons.push('avanço ≥ 80%');
+  if (c.score_alertas_legais > 0) reasons.push(`${c.alertas.length} alerta(s) legal(is)`);
+  if (c.score_gap > 0) reasons.push('gap físico-financeiro ≥ 20pp');
+  if (c.score_saldo > 0) reasons.push('saldo ≤ 5%');
+  if (c.pendencias_high > 0) reasons.push(`${c.pendencias_high} pendência(s) alta`);
+
+  return (
+    <li className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50 dark:border-border-dark dark:hover:bg-muted-dark">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-error/20 to-warning/10 text-lg font-bold tabular text-error">
+        {c.score}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <Link to={`/contratos/${c.id}`} className="font-mono font-semibold text-navy hover:underline dark:text-purple-300">{c.numero}</Link>
+          <Badge tone={NIVEL_TONE[c.nivel]}>{NIVEL_LABEL[c.nivel]}</Badge>
+        </div>
+        <p className="mt-0.5 truncate text-xs text-slate-600 dark:text-slate-300">{c.objeto}</p>
+        <p className="mt-0.5 text-xs italic text-slate-500 dark:text-slate-400">
+          {reasons.length > 0 ? reasons.join(' · ') : 'sem componentes críticos isolados — score residual'}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="font-mono text-xs tabular text-slate-500 dark:text-slate-400">{brl(c.valor_atual)}</span>
+        <Link to={`/contratos/${c.id}/risco`} className="text-xs font-semibold text-navy hover:underline dark:text-purple-300">
+          Análise →
+        </Link>
+      </div>
+    </li>
+  );
+}
+
+function PortfolioRiskTrend({ data }: { data: TenantRiskTrendPoint[] }) {
+  if (data.length < 2) return null;
+
+  const W = 280;
+  const H = 100;
+  const PAD = { top: 8, right: 8, bottom: 18, left: 24 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+  const maxScore = 100;
+  const stepX = innerW / (data.length - 1);
+  const yAt = (s: number) => PAD.top + innerH - (s / maxScore) * innerH;
+  const xAt = (i: number) => PAD.left + i * stepX;
+  const points = data.map((d, i) => `${xAt(i)},${yAt(d.avg_score)}`).join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+      {[0, 50, 100].map((v) => (
+        <g key={v}>
+          <line x1={PAD.left} x2={W - PAD.right} y1={yAt(v)} y2={yAt(v)} stroke="currentColor" className="text-slate-200 dark:text-slate-700" strokeWidth={0.5} strokeDasharray="2 3" />
+          <text x={PAD.left - 4} y={yAt(v) + 3} textAnchor="end" fontSize="8" className="fill-slate-500 dark:fill-slate-400">{v}</text>
+        </g>
+      ))}
+      <line x1={PAD.left} x2={W - PAD.right} y1={yAt(70)} y2={yAt(70)} stroke="#ef4444" strokeWidth={0.5} strokeDasharray="4 2" opacity={0.4} />
+      <line x1={PAD.left} x2={W - PAD.right} y1={yAt(40)} y2={yAt(40)} stroke="#f59e0b" strokeWidth={0.5} strokeDasharray="4 2" opacity={0.4} />
+      <polyline fill="none" stroke="#7e22ce" strokeWidth={1.5} points={points} strokeLinejoin="round" strokeLinecap="round" />
+      <polygon
+        fill="#7e22ce" opacity={0.12}
+        points={`${PAD.left},${yAt(0)} ${points} ${xAt(data.length - 1)},${yAt(0)}`}
+      />
+      {data.map((d, i) => {
+        if (i !== 0 && i !== data.length - 1 && i % Math.ceil(data.length / 4) !== 0) return null;
+        const dt = new Date(d.captured_date + 'T00:00:00');
+        const label = `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        return (
+          <text key={d.captured_date} x={xAt(i)} y={H - 4} textAnchor="middle" fontSize="8" className="fill-slate-500 dark:fill-slate-400">{label}</text>
+        );
+      })}
+      {/* Ponto final destacado */}
+      <circle cx={xAt(data.length - 1)} cy={yAt(data[data.length - 1].avg_score)} r={2.5} fill="#7e22ce" stroke="white" strokeWidth={1} />
+    </svg>
   );
 }

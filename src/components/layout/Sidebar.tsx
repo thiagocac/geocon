@@ -1,7 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
 import {
   Home, Layers, FolderTree, Bell, Users, LogOut, ShieldCheck, ChevronDown,
-  Briefcase, BookOpen, ClipboardList, PieChart, BarChart3, History,
+  Briefcase, BookOpen, ClipboardList, PieChart, BarChart3, History, Mail,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -31,6 +31,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/disciplines',          label: 'Disciplinas',  icon: Layers,      roles: ['admin', 'gestor_contrato'] },
   { to: '/admin/contratos/workflows',  label: 'Workflows',    icon: ShieldCheck, roles: ['admin'] },
   { to: '/admin/auditoria',            label: 'Auditoria',    icon: History,     roles: ['admin'] },
+  { to: '/admin/digests',              label: 'Digests',      icon: Mail,        roles: ['admin'] },
   { to: '/admin/backlog',              label: 'Backlog',      icon: BookOpen,    roles: ['admin'] },
 ];
 
@@ -56,25 +57,28 @@ export function Sidebar({ open, onClose }: Props) {
 
       <aside
         className={[
-          'fixed bottom-0 left-0 z-40 flex w-64 flex-col bg-navy text-white transition-transform lg:translate-x-0',
+          'fixed bottom-0 left-0 z-40 flex w-64 flex-col bg-navy-900 text-white transition-transform lg:translate-x-0',
           SKIP_AUTH ? 'top-6' : 'top-0',
           open ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >
-        {/* Logo */}
+        {/* Logo — assets canônicos do brand book (PNG 1x + 2x retina) */}
         <div className="flex h-16 items-center px-5">
           <Link to="/dashboard" className="flex items-center gap-2" onClick={onClose}>
-            <img src="/logos/logo-mark.svg" alt="" className="h-7 w-7" />
-            <span className="font-bold text-white">
-              <span className="text-magenta">°</span>geoCon
-            </span>
+            <img
+              src="/logos/logo-white.png"
+              srcSet="/logos/logo-white.png 1x, /logos/logo-white@2x.png 2x"
+              alt="geoCon"
+              className="h-7 w-auto"
+            />
+            <span className="sr-only">geoCon · Consulte GEO</span>
           </Link>
         </div>
 
         {/* Tenant */}
         {member?.tenants && (
           <div className="mx-3 mb-2 rounded-lg bg-white/10 px-3 py-2 text-xs">
-            <div className="font-mono uppercase tracking-widest text-white/60">tenant</div>
+            <div className="font-mono uppercase tracking-display text-white/60">tenant</div>
             <div className="truncate font-medium">{member.tenants.nome}</div>
           </div>
         )}
@@ -151,7 +155,7 @@ export function Sidebar({ open, onClose }: Props) {
         {/* Switcher Consulte GEO */}
         <div className="border-t border-white/10 p-4">
           <div className="rounded-xl bg-white/10 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">
+            <p className="text-[10px] font-bold uppercase tracking-display text-white/60">
               Plataforma Consulte GEO
             </p>
             <p className="mt-1 text-xs text-white">

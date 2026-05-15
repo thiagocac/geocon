@@ -35,9 +35,12 @@ import { MyApprovals } from './pages/MyApprovals';
 import { Reports } from './pages/Reports';
 import { Eap } from './pages/Eap';
 import { SovVersionCompare } from './pages/SovVersionCompare';
+import { ContractRiskAnalysis } from './pages/ContractRiskAnalysis';
+import { NotificationPreferences } from './pages/NotificationPreferences';
 import { AdminPrograms } from './pages/admin/Programs';
 import { AdminDisciplines } from './pages/admin/Disciplines';
 import { AdminAuditLog } from './pages/admin/AuditLog';
+import { AdminDigests } from './pages/admin/Digests';
 import { Additives } from './pages/Additives';
 import { UnforeseenList, UnforeseenDetail } from './pages/UnforeseenItems';
 import { MeasurementApprovePage } from './pages/MeasurementApprovePage';
@@ -75,6 +78,7 @@ export function App() {
         <Route path="/aprovacoes"         element={<P><MyApprovals /></P>} />
         <Route path="/relatorios"         element={<P><Reports /></P>} />
         <Route path="/me"                 element={<P><Me /></P>} />
+        <Route path="/me/notificacoes"    element={<P><NotificationPreferences /></P>} />
         <Route path="/notifications"      element={<P><Notifications /></P>} />
 
         {/* Contracts */}
@@ -99,6 +103,7 @@ export function App() {
         <Route path="/contratos/:id/cronograma"               element={<P><Schedule /></P>} />
         <Route path="/contratos/:id/eap"                      element={<P><Eap /></P>} />
         <Route path="/contratos/:id/planilha/versoes"         element={<P><SovVersionCompare /></P>} />
+        <Route path="/contratos/:id/risco"                    element={<P><ContractRiskAnalysis /></P>} />
         <Route path="/contratos/:id/relatorios"               element={<P><ContractReports /></P>} />
 
         {/* GED */}
@@ -119,6 +124,7 @@ export function App() {
         <Route path="/admin/programs"            element={<P roles={['admin', 'gestor_contrato']}><AdminPrograms /></P>} />
         <Route path="/admin/disciplines"         element={<P roles={['admin', 'gestor_contrato']}><AdminDisciplines /></P>} />
         <Route path="/admin/auditoria"           element={<P roles={['admin']}><AdminAuditLog /></P>} />
+        <Route path="/admin/digests"             element={<P roles={['admin']}><AdminDigests /></P>} />
         <Route path="/admin/backlog"             element={<P roles={['admin']}><Backlog /></P>} />
 
         {/* 404 fallback */}

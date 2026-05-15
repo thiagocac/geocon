@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
   FileSpreadsheet, Calculator, PenLine, WalletCards, LineChart, FileText,
-  Plus, MapPin, Calendar, Building2, Users as UsersIcon, Edit3, Layers, AlertCircle,
+  Plus, MapPin, Calendar, Building2, Users as UsersIcon, Edit3, Layers, AlertCircle, ShieldAlert,
 } from 'lucide-react';
 import { getContract, getSaldoAlert } from '../lib/api';
 import { brl, num, dt } from '../lib/format';
@@ -66,6 +66,7 @@ export function ContractDetail() {
     ['Financeiro',    'financeiro',           WalletCards,     'Curva S, pagamentos'],
     ['Cronograma',    'cronograma',           LineChart,       'Físico-financeiro'],
     ['EAP',           'eap',                  Layers,          'Estrutura analítica'],
+    ['Análise de risco', 'risco',             ShieldAlert,     'Score, alertas, recomendações'],
     ['Relatórios',    'relatorios',           FileText,        'Pacote auditável'],
     ['Obras / lotes', 'obras',                Building2,       'Empreendimentos físicos'],
     ['Partes',        'partes',               UsersIcon,       'Gestor, fiscal, contratada'],

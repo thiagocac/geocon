@@ -3719,3 +3719,790 @@ export async function listMyPendingApprovals(): Promise<PendingApprovalRow[]> {
       };
     });
 }
+
+// =============================================================================
+// Risk analysis (V9) — v_contract_risk_analysis + v_top_critical_contracts
+// =============================================================================
+
+export interface RiskAnalysisRow {
+  contract_id: string;
+  tenant_id: string;
+  numero: string;
+  objeto: string;
+  contratada_nome: string | null;
+  valor_inicial: number;
+  valor_atual: number;
+  valor_aditado: number;
+  valor_medido_acumulado: number;
+  saldo_contratual: number;
+  percentual_financeiro: number;
+  percentual_fisico: number;
+  alertas: string[];
+  data_termino: string | null;
+  status: string;
+  gap_fis_fin: number;
+  pct_aditivos_sobre_inicial: number;
+  pct_saldo: number;
+  pendencias_high: number;
+  pendencias_medium: number;
+  pendencias_total: number;
+  pendencia_mais_antiga_dias: number;
+  medicoes_em_aprovacao_atrasadas: number;
+  forecast_3m: number | null;
+  forecast_6m: number | null;
+  forecast_12m: number | null;
+  risk_flags: Record<string, unknown> | null;
+  snapshot_at: string | null;
+  score: number;
+  score_avanco: number;
+  score_alertas_legais: number;
+  score_gap: number;
+  score_saldo: number;
+}
+
+export interface TopCriticalContract {
+  id: string;
+  tenant_id: string;
+  numero: string;
+  objeto: string;
+  contratada_nome: string | null;
+  valor_atual: number;
+  saldo_contratual: number;
+  percentual_financeiro: number;
+  percentual_fisico: number;
+  score: number;
+  score_avanco: number;
+  score_alertas_legais: number;
+  score_gap: number;
+  score_saldo: number;
+  pendencias_high: number;
+  alertas: string[];
+  nivel: 'critico' | 'atencao' | 'monitorar' | 'estavel';
+}
+
+export interface RiskRecommendation {
+  tipo: string;
+  prioridade: 'alta' | 'media' | 'baixa';
+  titulo: string;
+  descricao: string;
+  acao_label: string;
+  acao_href: string;
+}
+
+export interface ContractRiskRecommendations {
+  contract_id: string;
+  score: number;
+  nivel: 'critico' | 'atencao' | 'monitorar' | 'estavel';
+  computed_at: string;
+  recommendations: RiskRecommendation[];
+}
+
+// Mock para SKIP_AUTH
+const MOCK_TOP_CRITICAL: TopCriticalContract[] = MOCK_CONTRACTS.slice(0, 3).map((c, i) => ({
+  id: c.id,
+  tenant_id: 't1',
+  numero: c.numero,
+  objeto: c.objeto,
+  contratada_nome: c.contratada_nome,
+  valor_atual: c.valor_atual,
+  saldo_contratual: c.saldo_contratual,
+  percentual_financeiro: c.percentual_financeiro,
+  percentual_fisico: c.percentual_fisico,
+  score: [75, 55, 30][i] || 30,
+  score_avanco: i === 0 ? 30 : 15,
+  score_alertas_legais: i === 0 ? 25 : 0,
+  score_gap: i === 1 ? 25 : 0,
+  score_saldo: i === 0 ? 20 : 0,
+  pendencias_high: i,
+  alertas: c.alertas,
+  nivel: i === 0 ? 'critico' : i === 1 ? 'atencao' : 'monitorar',
+}));
+
+export async function listTopCriticalContracts(limit = 5): Promise<TopCriticalContract[]> {
+  if (SKIP_AUTH) return MOCK_TOP_CRITICAL.slice(0, limit);
+  checkSupabase();
+  const r = await supabase
+    .from('v_top_critical_contracts')
+    .select('*')
+    .gt('score', 0)
+    .limit(limit);
+  fail(r.error);
+  return (r.data || []) as TopCriticalContract[];
+}
+
+export async function getContractRiskAnalysis(contract_id: string): Promise<RiskAnalysisRow | null> {
+  if (SKIP_AUTH) {
+    const mock = MOCK_TOP_CRITICAL.find((c) => c.id === contract_id);
+    if (!mock) return null;
+    return {
+      contract_id: mock.id,
+      tenant_id: mock.tenant_id,
+      numero: mock.numero,
+      objeto: mock.objeto,
+      contratada_nome: mock.contratada_nome,
+      valor_inicial: mock.valor_atual * 0.9,
+      valor_atual: mock.valor_atual,
+      valor_aditado: mock.valor_atual * 0.1,
+      valor_medido_acumulado: mock.valor_atual * (mock.percentual_financeiro / 100),
+      saldo_contratual: mock.saldo_contratual,
+      percentual_financeiro: mock.percentual_financeiro,
+      percentual_fisico: mock.percentual_fisico,
+      alertas: mock.alertas,
+      data_termino: null,
+      status: 'ativo',
+      gap_fis_fin: mock.percentual_financeiro - mock.percentual_fisico,
+      pct_aditivos_sobre_inicial: 11,
+      pct_saldo: (mock.saldo_contratual / mock.valor_atual) * 100,
+      pendencias_high: mock.pendencias_high,
+      pendencias_medium: 0,
+      pendencias_total: mock.pendencias_high,
+      pendencia_mais_antiga_dias: 12,
+      medicoes_em_aprovacao_atrasadas: 0,
+      forecast_3m: 500000, forecast_6m: 1000000, forecast_12m: 2000000,
+      risk_flags: null, snapshot_at: null,
+      score: mock.score,
+      score_avanco: mock.score_avanco,
+      score_alertas_legais: mock.score_alertas_legais,
+      score_gap: mock.score_gap,
+      score_saldo: mock.score_saldo,
+    };
+  }
+  checkSupabase();
+  const r = await supabase
+    .from('v_contract_risk_analysis')
+    .select('*')
+    .eq('contract_id', contract_id)
+    .maybeSingle();
+  fail(r.error);
+  return (r.data || null) as RiskAnalysisRow | null;
+}
+
+export async function getContractRiskRecommendations(contract_id: string): Promise<ContractRiskRecommendations | null> {
+  if (SKIP_AUTH) {
+    const mock = MOCK_TOP_CRITICAL.find((c) => c.id === contract_id);
+    if (!mock) return null;
+    const recs: RiskRecommendation[] = [];
+    if (mock.score_avanco >= 30) recs.push({
+      tipo: 'avanco_alto', prioridade: 'alta',
+      titulo: 'Contrato próximo do encerramento (≥ 95% medido)',
+      descricao: 'Conduza pré-fechamento: validação documental, livro de medição encerrado, devolução de cauções.',
+      acao_label: 'Ver financeiro', acao_href: `/contratos/${contract_id}/financeiro`,
+    });
+    if (mock.score_alertas_legais > 0) recs.push({
+      tipo: 'alertas_legais', prioridade: 'alta',
+      titulo: 'Alertas legais ativos',
+      descricao: 'Há ' + (mock.alertas?.length || 0) + ' alerta(s) que requerem revisão.',
+      acao_label: 'Editar contrato', acao_href: `/contratos/${contract_id}/editar`,
+    });
+    if (mock.score_gap > 0) recs.push({
+      tipo: 'gap_fis_fin', prioridade: 'alta',
+      titulo: 'Avanço financeiro descolado do físico',
+      descricao: 'Revise medições para identificar antecipações.',
+      acao_label: 'Ver medições', acao_href: `/contratos/${contract_id}/medicoes`,
+    });
+    if (recs.length === 0) recs.push({
+      tipo: 'estavel', prioridade: 'baixa',
+      titulo: 'Contrato em condição saudável',
+      descricao: 'Sem sinais de risco operacional ou financeiro.',
+      acao_label: 'Ver financeiro', acao_href: `/contratos/${contract_id}/financeiro`,
+    });
+    return {
+      contract_id, score: mock.score, nivel: mock.nivel,
+      computed_at: new Date().toISOString(), recommendations: recs,
+    };
+  }
+  checkSupabase();
+  const r = await supabase.rpc('get_contract_risk_recommendations', { p_contract_id: contract_id });
+  fail(r.error);
+  return (r.data || null) as ContractRiskRecommendations | null;
+}
+
+// =============================================================================
+// Backlog admin CRUD (V9)
+// =============================================================================
+
+export interface BacklogItem {
+  id: string;
+  numero: number;
+  titulo: string;
+  descricao: string | null;
+  categoria: 'autorizacao' | 'ui_ux' | 'pdf' | 'email' | 'relatorios' | 'autenticacao' | 'tema' | 'integracao' | 'contratos' | 'medicoes' | 'ged' | 'outro';
+  prioridade: 'baixa' | 'media' | 'alta';
+  status: 'aberto' | 'em_andamento' | 'concluido' | 'cancelado';
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listBacklog(): Promise<BacklogItem[]> {
+  if (SKIP_AUTH) return [];
+  checkSupabase();
+  const r = await supabase.from('admin_backlog').select('*').order('numero', { ascending: false });
+  fail(r.error);
+  return (r.data || []) as BacklogItem[];
+}
+
+export async function createBacklogItem(input: {
+  titulo: string;
+  descricao?: string | null;
+  categoria: BacklogItem['categoria'];
+  prioridade: BacklogItem['prioridade'];
+}): Promise<BacklogItem> {
+  checkSupabase();
+  const r = await supabase
+    .from('admin_backlog')
+    .insert([{
+      titulo: input.titulo,
+      descricao: input.descricao ?? null,
+      categoria: input.categoria,
+      prioridade: input.prioridade,
+      status: 'aberto',
+    }])
+    .select('*')
+    .single();
+  fail(r.error);
+  return r.data as BacklogItem;
+}
+
+export async function updateBacklogItem(id: string, input: Partial<{
+  titulo: string;
+  descricao: string | null;
+  categoria: BacklogItem['categoria'];
+  prioridade: BacklogItem['prioridade'];
+  status: BacklogItem['status'];
+}>): Promise<BacklogItem> {
+  checkSupabase();
+  const r = await supabase
+    .from('admin_backlog')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single();
+  fail(r.error);
+  return r.data as BacklogItem;
+}
+
+// =============================================================================
+// Audit log enhancements (V9) — date range filter (used by AuditLog page)
+// =============================================================================
+
+export async function listAuditLogRange(input: {
+  entity_type?: string | null;
+  entity_id?: string | null;
+  severity?: 'info' | 'warn' | 'error' | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  actor_id?: string | null;
+  limit?: number;
+} = {}): Promise<AuditLogEntry[]> {
+  if (SKIP_AUTH) {
+    let arr = MOCK_AUDIT_LOG;
+    if (input.entity_type) arr = arr.filter((a) => a.entity_type === input.entity_type);
+    if (input.entity_id) arr = arr.filter((a) => a.entity_id === input.entity_id);
+    if (input.severity) arr = arr.filter((a) => a.severity === input.severity);
+    if (input.date_from) arr = arr.filter((a) => a.created_at >= input.date_from!);
+    if (input.date_to) arr = arr.filter((a) => a.created_at <= input.date_to!);
+    if (input.actor_id) arr = arr.filter((a) => a.actor_id === input.actor_id);
+    return arr.slice(0, input.limit ?? 500);
+  }
+  checkSupabase();
+  let q = supabase
+    .from('audit_log')
+    .select('*, actor:members(nome, email)')
+    .order('created_at', { ascending: false })
+    .limit(input.limit ?? 500);
+  if (input.entity_type) q = q.eq('entity_type', input.entity_type);
+  if (input.entity_id) q = q.eq('entity_id', input.entity_id);
+  if (input.severity) q = q.eq('severity', input.severity);
+  if (input.actor_id) q = q.eq('actor_id', input.actor_id);
+  if (input.date_from) q = q.gte('created_at', input.date_from);
+  if (input.date_to) q = q.lte('created_at', input.date_to);
+  const r = await q;
+  fail(r.error);
+  type Row = AuditLogEntry & { actor: { nome: string; email: string }[] | null };
+  return ((r.data || []) as unknown as Row[]).map((x) => ({
+    ...x,
+    actor: Array.isArray(x.actor) && x.actor.length > 0 ? x.actor[0] : null,
+  }));
+}
+
+// =============================================================================
+// Risk history (V10) — snapshots históricos do score
+// =============================================================================
+
+export interface RiskSnapshot {
+  id: string;
+  tenant_id: string;
+  contract_id: string;
+  captured_at: string;
+  captured_date: string;
+  score: number;
+  score_avanco: number;
+  score_alertas_legais: number;
+  score_gap: number;
+  score_saldo: number;
+  nivel: 'critico' | 'atencao' | 'monitorar' | 'estavel';
+  percentual_financeiro: number | null;
+  percentual_fisico: number | null;
+  saldo_contratual: number | null;
+  pendencias_high: number;
+  alertas: string[];
+  source: 'manual' | 'auto_view' | 'cron' | 'pdf_export';
+  captured_by_nome?: string | null;
+}
+
+export async function listRiskSnapshots(contract_id: string, limit = 30): Promise<RiskSnapshot[]> {
+  if (SKIP_AUTH) {
+    // Gera série sintética coerente para demo
+    const out: RiskSnapshot[] = [];
+    const baseScore = 55;
+    const today = new Date();
+    for (let i = 14; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 86400_000 * 2);
+      const score = Math.max(0, Math.min(100, Math.round(baseScore + Math.sin(i / 3) * 15 + (Math.random() - 0.5) * 8)));
+      const nivel: RiskSnapshot['nivel'] = score >= 70 ? 'critico' : score >= 40 ? 'atencao' : score >= 20 ? 'monitorar' : 'estavel';
+      out.push({
+        id: `mock-snap-${i}`,
+        tenant_id: 't1',
+        contract_id,
+        captured_at: d.toISOString(),
+        captured_date: d.toISOString().slice(0, 10),
+        score,
+        score_avanco: Math.round(score * 0.3),
+        score_alertas_legais: score > 60 ? 25 : 0,
+        score_gap: score > 50 ? 25 : 0,
+        score_saldo: 0,
+        nivel,
+        percentual_financeiro: 50 + i,
+        percentual_fisico: 45 + i,
+        saldo_contratual: 1000000 - i * 20000,
+        pendencias_high: score > 70 ? 2 : 0,
+        alertas: score > 60 ? ['vigência'] : [],
+        source: i === 0 ? 'auto_view' : 'cron',
+      });
+    }
+    return out.slice(0, limit).reverse();
+  }
+  checkSupabase();
+  const r = await supabase
+    .from('v_contract_risk_history')
+    .select('*')
+    .eq('contract_id', contract_id)
+    .order('captured_at', { ascending: false })
+    .limit(limit);
+  fail(r.error);
+  return ((r.data || []) as RiskSnapshot[]);
+}
+
+export async function captureRiskSnapshot(contract_id: string, source: RiskSnapshot['source'] = 'auto_view'): Promise<RiskSnapshot | null> {
+  if (SKIP_AUTH) return null;
+  checkSupabase();
+  const r = await supabase.rpc('capture_risk_snapshot', { p_contract_id: contract_id, p_source: source });
+  fail(r.error);
+  return (r.data || null) as RiskSnapshot | null;
+}
+
+export async function generateRiskAnalysisPdf(contract_id: string): Promise<{
+  storage_path: string; hash_sha256: string; public_validation_code: string;
+  validation_url: string; size_bytes: number; score: number; nivel: string;
+}> {
+  if (SKIP_AUTH) {
+    return {
+      storage_path: '/demo/risk.pdf', hash_sha256: 'demo-hash', public_validation_code: 'DEMO1234',
+      validation_url: '/v/DEMO1234', size_bytes: 0, score: 55, nivel: 'atencao',
+    };
+  }
+  checkSupabase();
+  const { data, error } = await supabase.functions.invoke('generate-risk-analysis-pdf', { body: { contract_id } });
+  if (error) throw new Error(humanizeError(error));
+  if (!data?.ok) throw new Error(data?.error || 'Falha ao gerar PDF');
+  return data;
+}
+
+export async function getReportSignedUrl(storage_path: string, expires_in_seconds = 300): Promise<string> {
+  if (SKIP_AUTH) return storage_path;
+  checkSupabase();
+  const r = await supabase.storage.from('reports').createSignedUrl(storage_path, expires_in_seconds);
+  fail(r.error);
+  if (!r.data?.signedUrl) throw new Error('URL assinada não retornada');
+  return r.data.signedUrl;
+}
+
+// =============================================================================
+// Notification preferences (V11)
+// =============================================================================
+
+export type NotificationEventType =
+  | 'measurement_approval_pending'
+  | 'measurement_decided'
+  | 'grd_received'
+  | 'unforeseen_decision_pending'
+  | 'additive_approval_pending'
+  | 'pendency_high'
+  | 'risk_critico'
+  | 'digest_daily';
+
+export type NotificationChannel = 'in_app' | 'email';
+
+export interface NotificationPrefRow {
+  event_type: NotificationEventType;
+  channel: NotificationChannel;
+  enabled: boolean;
+  pref_id: string | null;
+  updated_at: string | null;
+}
+
+const EVENT_DEFAULTS: Record<NotificationEventType, boolean> = {
+  measurement_approval_pending: true,
+  measurement_decided: true,
+  grd_received: true,
+  unforeseen_decision_pending: true,
+  additive_approval_pending: true,
+  pendency_high: true,
+  risk_critico: true,
+  digest_daily: false,
+};
+
+const ALL_EVENTS: NotificationEventType[] = [
+  'measurement_approval_pending',
+  'measurement_decided',
+  'grd_received',
+  'unforeseen_decision_pending',
+  'additive_approval_pending',
+  'pendency_high',
+  'risk_critico',
+  'digest_daily',
+];
+
+const MOCK_PREFS: NotificationPrefRow[] = ALL_EVENTS.flatMap((e) => [
+  { event_type: e, channel: 'in_app' as const, enabled: EVENT_DEFAULTS[e], pref_id: null, updated_at: null },
+  { event_type: e, channel: 'email'  as const, enabled: EVENT_DEFAULTS[e], pref_id: null, updated_at: null },
+]);
+
+export async function listMyNotificationPrefs(): Promise<NotificationPrefRow[]> {
+  if (SKIP_AUTH) return MOCK_PREFS;
+  checkSupabase();
+  const r = await supabase.from('v_my_notification_prefs').select('*');
+  fail(r.error);
+  return ((r.data || []) as NotificationPrefRow[]);
+}
+
+export async function upsertNotificationPref(input: {
+  event_type: NotificationEventType;
+  channel: NotificationChannel;
+  enabled: boolean;
+}): Promise<void> {
+  if (SKIP_AUTH) {
+    const idx = MOCK_PREFS.findIndex((p) => p.event_type === input.event_type && p.channel === input.channel);
+    if (idx >= 0) MOCK_PREFS[idx] = { ...MOCK_PREFS[idx], enabled: input.enabled, updated_at: new Date().toISOString() };
+    return;
+  }
+  checkSupabase();
+  const r = await supabase.rpc('upsert_notification_pref', {
+    p_event_type: input.event_type,
+    p_channel: input.channel,
+    p_enabled: input.enabled,
+  });
+  fail(r.error);
+}
+
+// =============================================================================
+// Tenant-wide risk trend (V11) — média do score do portfólio ao longo do tempo
+// =============================================================================
+
+export interface TenantRiskTrendPoint {
+  captured_date: string;
+  avg_score: number;
+  high_count: number; // contratos com score >= 70 naquele dia
+  total: number;
+}
+
+export async function getTenantRiskTrend(days = 30): Promise<TenantRiskTrendPoint[]> {
+  if (SKIP_AUTH) {
+    const out: TenantRiskTrendPoint[] = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 86400_000);
+      const base = 35 + Math.sin(i / 4) * 10;
+      out.push({
+        captured_date: d.toISOString().slice(0, 10),
+        avg_score: Math.round(base + (Math.random() - 0.5) * 8),
+        high_count: Math.max(0, Math.round((i % 5 === 0 ? 2 : 0) + Math.random())),
+        total: 8,
+      });
+    }
+    return out;
+  }
+  checkSupabase();
+  // Agrega client-side a partir de v_contract_risk_history
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const r = await supabase
+    .from('contract_risk_snapshots')
+    .select('captured_date, score')
+    .gte('captured_at', since)
+    .order('captured_date', { ascending: true });
+  fail(r.error);
+  const rows = (r.data || []) as Array<{ captured_date: string; score: number }>;
+  const byDate = new Map<string, { sum: number; count: number; high: number }>();
+  for (const row of rows) {
+    const cur = byDate.get(row.captured_date) || { sum: 0, count: 0, high: 0 };
+    cur.sum += row.score;
+    cur.count += 1;
+    if (row.score >= 70) cur.high += 1;
+    byDate.set(row.captured_date, cur);
+  }
+  return Array.from(byDate.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([captured_date, v]) => ({
+      captured_date,
+      avg_score: v.count > 0 ? Math.round(v.sum / v.count) : 0,
+      high_count: v.high,
+      total: v.count,
+    }));
+}
+
+// =============================================================================
+// Digest preview & quiet hours (V12)
+// =============================================================================
+
+export interface DigestPreview {
+  member_id: string;
+  email: string;
+  nome: string;
+  aprovacoes_pendentes: number;
+  aprovacoes_atrasadas: number;
+  grds_pendentes: number;
+  notif_nao_lidas: number;
+  pendencias_high_tenant: number;
+  contratos_criticos_tenant: number;
+  contratos_atencao_tenant: number;
+  computed_at: string;
+  empty?: boolean;
+}
+
+export async function getMyDigestPreview(): Promise<DigestPreview | null> {
+  if (SKIP_AUTH) {
+    return {
+      member_id: 'mock-m', email: 'demo@consultegeo.org', nome: 'Demo Usuário',
+      aprovacoes_pendentes: 3, aprovacoes_atrasadas: 1,
+      grds_pendentes: 2, notif_nao_lidas: 5,
+      pendencias_high_tenant: 2, contratos_criticos_tenant: 1,
+      contratos_atencao_tenant: 2,
+      computed_at: new Date().toISOString(),
+    };
+  }
+  checkSupabase();
+  const r = await supabase.rpc('get_my_digest_preview');
+  fail(r.error);
+  return (r.data || null) as DigestPreview | null;
+}
+
+export interface QuietHoursPrefs {
+  timezone: string;
+  quiet_hours_enabled: boolean;
+  quiet_hours_start: string | null; // HH:MM:SS
+  quiet_hours_end: string | null;
+}
+
+export async function getMyQuietHours(): Promise<QuietHoursPrefs | null> {
+  if (SKIP_AUTH) {
+    return { timezone: 'America/Sao_Paulo', quiet_hours_enabled: false, quiet_hours_start: null, quiet_hours_end: null };
+  }
+  checkSupabase();
+  // current_member_id é determinado por RLS — não precisa filtrar; member é único por sessão
+  const r = await supabase
+    .from('members')
+    .select('id,timezone,quiet_hours_enabled,quiet_hours_start,quiet_hours_end')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  fail(r.error);
+  if (!r.data) return null;
+  return {
+    timezone: r.data.timezone || 'America/Sao_Paulo',
+    quiet_hours_enabled: r.data.quiet_hours_enabled === true,
+    quiet_hours_start: r.data.quiet_hours_start,
+    quiet_hours_end: r.data.quiet_hours_end,
+  };
+}
+
+export async function updateMyQuietHours(input: QuietHoursPrefs & { member_id: string }): Promise<void> {
+  if (SKIP_AUTH) return;
+  checkSupabase();
+  const r = await supabase
+    .from('members')
+    .update({
+      timezone: input.timezone,
+      quiet_hours_enabled: input.quiet_hours_enabled,
+      quiet_hours_start: input.quiet_hours_start,
+      quiet_hours_end: input.quiet_hours_end,
+    })
+    .eq('id', input.member_id);
+  fail(r.error);
+}
+
+export async function triggerDigestPreview(dry_run = true): Promise<{ processed: number; sent: number; results: Array<{ member_id: string; email: string; status: string }> }> {
+  if (SKIP_AUTH) return { processed: 0, sent: 0, results: [] };
+  checkSupabase();
+  const { data, error } = await supabase.functions.invoke('digest-daily', { body: { dry_run, force: dry_run } });
+  if (error) throw new Error(humanizeError(error));
+  if (!data?.ok) throw new Error(data?.error || 'Falha ao executar digest');
+  return data;
+}
+
+// =============================================================================
+// User filter presets (V13)
+// =============================================================================
+
+export type FilterPresetPage = 'pendencias' | 'audit_log' | 'contracts' | 'measurements';
+
+export interface FilterPreset {
+  id: string;
+  tenant_id: string;
+  member_id: string;
+  page_key: FilterPresetPage;
+  nome: string;
+  filters: Record<string, unknown>;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+const MOCK_PRESETS: FilterPreset[] = [];
+
+export async function listMyFilterPresets(page_key: FilterPresetPage): Promise<FilterPreset[]> {
+  if (SKIP_AUTH) return MOCK_PRESETS.filter((p) => p.page_key === page_key);
+  checkSupabase();
+  const r = await supabase
+    .from('user_filter_presets')
+    .select('*')
+    .eq('page_key', page_key)
+    .is('deleted_at', null)
+    .order('is_default', { ascending: false })
+    .order('updated_at', { ascending: false });
+  fail(r.error);
+  return (r.data || []) as FilterPreset[];
+}
+
+export async function saveFilterPreset(input: {
+  page_key: FilterPresetPage;
+  nome: string;
+  filters: Record<string, unknown>;
+  is_default?: boolean;
+}): Promise<FilterPreset> {
+  if (SKIP_AUTH) {
+    const existing = MOCK_PRESETS.findIndex((p) => p.page_key === input.page_key && p.nome === input.nome);
+    const now = new Date().toISOString();
+    const row: FilterPreset = {
+      id: existing >= 0 ? MOCK_PRESETS[existing].id : `mock-${Math.random().toString(36).slice(2, 9)}`,
+      tenant_id: 't1', member_id: 'm1',
+      page_key: input.page_key, nome: input.nome, filters: input.filters,
+      is_default: input.is_default || false,
+      created_at: existing >= 0 ? MOCK_PRESETS[existing].created_at : now,
+      updated_at: now,
+    };
+    if (existing >= 0) MOCK_PRESETS[existing] = row;
+    else MOCK_PRESETS.push(row);
+    return row;
+  }
+  checkSupabase();
+  const r = await supabase.rpc('save_filter_preset', {
+    p_page_key: input.page_key,
+    p_nome: input.nome,
+    p_filters: input.filters,
+    p_is_default: input.is_default || false,
+  });
+  fail(r.error);
+  return r.data as FilterPreset;
+}
+
+export async function deleteFilterPreset(id: string): Promise<void> {
+  if (SKIP_AUTH) {
+    const idx = MOCK_PRESETS.findIndex((p) => p.id === id);
+    if (idx >= 0) MOCK_PRESETS.splice(idx, 1);
+    return;
+  }
+  checkSupabase();
+  const r = await supabase.rpc('delete_filter_preset', { p_id: id });
+  fail(r.error);
+}
+
+// =============================================================================
+// Digests admin history (V13)
+// =============================================================================
+
+export interface DigestHistoryRow {
+  id: string;
+  tenant_id: string;
+  member_id: string;
+  member_nome: string | null;
+  member_email: string | null;
+  sent_date: string;
+  sent_at: string;
+  email_status: 'sent' | 'skipped' | 'failed';
+  metadata: Record<string, unknown>;
+  aprovacoes: number;
+  grds: number;
+  pendencias_high: number;
+  criticos: number;
+}
+
+export interface DigestDailyStat {
+  sent_date: string;
+  total: number;
+  enviados: number;
+  pulados: number;
+  falharam: number;
+}
+
+export async function listDigestsHistory(limit = 100, date_from?: string): Promise<DigestHistoryRow[]> {
+  if (SKIP_AUTH) {
+    const today = new Date();
+    return Array.from({ length: 12 }).map((_, i) => {
+      const d = new Date(today.getTime() - i * 86400_000);
+      const status: DigestHistoryRow['email_status'] = i % 7 === 0 ? 'failed' : (i % 3 === 0 ? 'skipped' : 'sent');
+      return {
+        id: `mock-${i}`,
+        tenant_id: 't1', member_id: 'm1',
+        member_nome: ['Thiago Vieira', 'Ricardo Mendes', 'Patrícia Lopes'][i % 3],
+        member_email: 'demo@consultegeo.org',
+        sent_date: d.toISOString().slice(0, 10),
+        sent_at: d.toISOString(),
+        email_status: status,
+        metadata: { aprovacoes: 3, grds: 2, pendencias_high: 1, criticos: 0 },
+        aprovacoes: 3, grds: 2, pendencias_high: 1, criticos: 0,
+      };
+    });
+  }
+  checkSupabase();
+  let q = supabase
+    .from('v_digests_history')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .limit(limit);
+  if (date_from) q = q.gte('sent_date', date_from);
+  const r = await q;
+  fail(r.error);
+  return (r.data || []) as DigestHistoryRow[];
+}
+
+export async function listDigestsDailyStats(days = 30): Promise<DigestDailyStat[]> {
+  if (SKIP_AUTH) {
+    const today = new Date();
+    return Array.from({ length: days }).map((_, i) => {
+      const d = new Date(today.getTime() - i * 86400_000);
+      return {
+        sent_date: d.toISOString().slice(0, 10),
+        total: 8 + (i % 3), enviados: 6 + (i % 3), pulados: 1, falharam: i % 7 === 0 ? 1 : 0,
+      };
+    }).reverse();
+  }
+  checkSupabase();
+  const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+  const r = await supabase
+    .from('v_digests_daily_stats')
+    .select('*')
+    .gte('sent_date', since)
+    .order('sent_date', { ascending: true });
+  fail(r.error);
+  return (r.data || []) as DigestDailyStat[];
+}
