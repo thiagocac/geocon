@@ -56,6 +56,7 @@ if [[ "${MODE}" == "functions-only" || "${MODE}" == "all" ]]; then
     recalc-financial-snapshot
     public-validation
     digest-daily
+    dispatch-broadcast-emails
   )
 
   echo "▶ Configurando secrets (se ainda não)..."
