@@ -149,6 +149,18 @@ Depois do deploy completo:
 ## 4. Operação contínua
 
 - **Cron `check-sla-overdue`**: agende para rodar a cada 1h no painel Supabase > Edge Functions > Schedules.
+- **Cron `digest-daily`** (V12): agende para rodar diariamente às 7h:
+    ```
+    0 7 * * *  →  POST https://<PROJECT_REF>.supabase.co/functions/v1/digest-daily
+                  Authorization: Bearer <SERVICE_ROLE_KEY>
+                  Body: {}
+    ```
+    Para um tenant específico: `{ "tenant_id": "<uuid>" }`. Dry-run: `{ "dry_run": true }`.
+- **Cron `capture_risk_snapshots_for_tenant`** (V10): agende para rodar diariamente às 2h via SQL:
+    ```sql
+    SELECT public.capture_risk_snapshots_for_tenant(t.id) FROM public.tenants t WHERE t.ativo = true;
+    ```
+    Use a função do pg_cron em Database > Cron Jobs.
 - **Backup**: configurar PITR (Point In Time Recovery) no Studio > Database > Backups.
 - **Monitoring**: Studio > Logs filtra por função; Resend Dashboard mostra entregabilidade de e-mails.
 

@@ -66,6 +66,10 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
+      letterSpacing: {
+        // Assinatura visual Consulte GEO — usado em kickers e selos
+        display: '0.18em',
+      },
       borderRadius: {
         // Padrão RDO/Consulte GEO
         DEFAULT: '0.5rem',  // 8px = rounded

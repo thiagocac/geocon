@@ -39,16 +39,23 @@ if [[ "${MODE}" == "functions-only" || "${MODE}" == "all" ]]; then
     approve-magic-link
     import-spreadsheet
     create-measurement
+    submit-measurement
     validate-measurement
     approve-measurement-step
     register-additive
+    register-payment
     generate-measurement-pdf
     generate-audit-package
-    extract-pdf-text
+    generate-report
     generate-databook-export
+    generate-labels-pdf
+    generate-risk-analysis-pdf
+    issue-grd-pdf
+    extract-pdf-text
     notify-pendency
     recalc-financial-snapshot
     public-validation
+    digest-daily
   )
 
   echo "▶ Configurando secrets (se ainda não)..."
