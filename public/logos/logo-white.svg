@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" fill="none">
+  <rect width="64" height="64" rx="14" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.3)"/>
+  <text x="32" y="42" font-family="Inter, system-ui, sans-serif" font-size="28" font-weight="800" text-anchor="middle" fill="#fff">°gC</text>
+  <text x="78" y="38" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="800" fill="#fff">
+    <tspan fill="#F472B6">°</tspan>geoCon
+  </text>
+  <text x="78" y="55" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="500" fill="rgba(255,255,255,0.7)">
+    Consulte GEO · Gestão de Contratos
+  </text>
+</svg>

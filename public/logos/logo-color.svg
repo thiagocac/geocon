@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" fill="none">
+  <defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#182863"/>
+      <stop offset="0.5" stop-color="#3E2D71"/>
+      <stop offset="1" stop-color="#C5117E"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#lg)"/>
+  <text x="32" y="42" font-family="Inter, system-ui, sans-serif" font-size="28" font-weight="800" text-anchor="middle" fill="#fff">°gC</text>
+  <text x="78" y="38" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="800" fill="#182863">
+    <tspan fill="#C5117E">°</tspan>geoCon
+  </text>
+  <text x="78" y="55" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="500" fill="#475569">
+    Consulte GEO · Gestão de Contratos
+  </text>
+</svg>
