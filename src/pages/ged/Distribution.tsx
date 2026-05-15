@@ -18,6 +18,7 @@ import { Layout } from '../../components/layout/Layout';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { StatusPill } from '../../components/ui/StatusPill';
 import { Button } from '../../components/ui/Button';
 import { Field, Select } from '../../components/ui/FormField';
 import { Empty, Skeleton } from '../../components/ui/Stat';
@@ -45,6 +46,7 @@ export function GedDistribution() {
   return (
     <Layout>
       <PageHeader
+        kicker="GED · Distribuição"
         title="Distribuição documental (GRD)"
         subtitle="Guias de remessa de documentos, listas de distribuição e confirmação de recebimento"
         backTo="/ged" backLabel="GED"
@@ -99,7 +101,7 @@ export function GedDistribution() {
                       )}
                     </td>
                     <td className="text-xs text-slate-500">{t.sent_at ? dt(t.sent_at) : '—'}</td>
-                    <td><Badge tone={st.tone}>{st.label}</Badge></td>
+                    <td><StatusPill tone={st.tone}>{st.label}</StatusPill></td>
                     <td className="text-right">
                       <Link to={t.id} className="text-navy underline-offset-2 hover:underline">Ver</Link>
                     </td>
@@ -547,7 +549,7 @@ export function GedDistributionDetail() {
                   </p>
                 )}
               </div>
-              <Badge tone={st.tone}>{st.label}</Badge>
+              <StatusPill tone={st.tone}>{st.label}</StatusPill>
             </div>
 
             <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">

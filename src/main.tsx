@@ -8,9 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './styles.css';
 import { App } from './App';
 import { initTheme } from './hooks/useTheme';
+import { initDensity } from './hooks/useDensity';
 
-// Aplica tema persistido ANTES do primeiro render (evita flash claro→escuro)
+// Aplica tema + densidade persistidos ANTES do primeiro render (evita flash)
 initTheme();
+initDensity();
 
 const queryClient = new QueryClient({
   defaultOptions: {

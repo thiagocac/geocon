@@ -107,6 +107,7 @@ export function ContractRiskAnalysis() {
   return (
     <Layout>
       <PageHeader
+        kicker="Contrato · Análise de risco"
         title="Análise de risco"
         subtitle={`${analysis.numero} — ${analysis.objeto.slice(0, 80)}${analysis.objeto.length > 80 ? '…' : ''}`}
         backTo={`/contratos/${id}`}

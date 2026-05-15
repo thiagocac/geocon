@@ -82,7 +82,13 @@ export function MagicLinkApprove() {
       <div className="mx-auto max-w-3xl px-4 py-10">
         {/* Brand */}
         <div className="mb-6 flex items-center gap-3 text-white">
-          <img src="/logos/logo-white.svg" alt="" className="h-10" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+          <img
+            src="/logos/logo-white.png"
+            srcSet="/logos/logo-white.png 1x, /logos/logo-white@2x.png 2x"
+            alt="geoCon"
+            className="h-10 w-auto"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
           <div>
             <h1 className="text-xl font-bold"><span className="text-pink-300">°</span>geoCon</h1>
             <p className="text-xs text-white/70">{PRODUCT_LONG_NAME}</p>

@@ -109,6 +109,7 @@ export function MyApprovals() {
   return (
     <Layout>
       <PageHeader
+        kicker="Minhas tarefas · Aprovações"
         title="Minhas aprovações"
         subtitle="Steps de workflow assignados a você em todos os contratos do tenant"
       />

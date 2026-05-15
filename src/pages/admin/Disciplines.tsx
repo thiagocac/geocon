@@ -30,6 +30,7 @@ export function AdminDisciplines() {
   return (
     <Layout>
       <PageHeader
+        kicker="Administração · Disciplinas"
         title="Disciplinas"
         subtitle="Biblioteca corporativa de disciplinas reutilizáveis em contratos, planilhas SOV, EAP e GED."
         backTo="/dashboard" backLabel="Dashboard"

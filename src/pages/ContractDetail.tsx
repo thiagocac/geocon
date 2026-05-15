@@ -14,6 +14,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Stat, Empty, ErrorState, Skeleton, Progress } from '../components/ui/Stat';
 import { Badge } from '../components/ui/Badge';
+import { StatusPill } from '../components/ui/StatusPill';
 import { Button } from '../components/ui/Button';
 
 export function ContractDetail() {
@@ -75,13 +76,14 @@ export function ContractDetail() {
   return (
     <Layout>
       <PageHeader
+        kicker="Contrato · Detalhe"
         title={c.numero}
         subtitle={c.objeto}
         backTo="/contratos"
         backLabel="Contratos"
         actions={
           <div className="flex items-center gap-2">
-            <Badge tone={status.tone}>{status.label}</Badge>
+            <StatusPill tone={status.tone}>{status.label}</StatusPill>
             <Link to="editar"><Button variant="outline"><Edit3 className="h-4 w-4" />Editar</Button></Link>
             <Link to="planilha"><Button variant="outline">Planilha</Button></Link>
             <Link to="medicoes"><Button>Medições</Button></Link>

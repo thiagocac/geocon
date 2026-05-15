@@ -42,6 +42,7 @@ export function Financial() {
   return (
     <Layout>
       <PageHeader
+        kicker="Contrato · Financeiro"
         title="Painel financeiro"
         subtitle="Curva S, snapshots, retenções, glosas, pagamentos e forecasts"
         backTo={`/contratos/${id}`} backLabel="Contrato"

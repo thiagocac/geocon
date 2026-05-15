@@ -101,6 +101,7 @@ export function UnforeseenList() {
   return (
     <Layout>
       <PageHeader
+        kicker="Contrato · Itens não previstos"
         title="Itens não previstos"
         subtitle="Pleitos, variações e itens extras — modelo de 5 objetos (solicitação → análise → aprovação → aditivo)"
         backTo={`/contratos/${id}`}

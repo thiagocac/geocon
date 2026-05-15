@@ -32,6 +32,7 @@ export function AdminUsers() {
   return (
     <Layout>
       <PageHeader
+        kicker="Administração · Backlog"
         title="Usuários e papéis"
         subtitle="Gestão de membros do tenant, papéis e permissões por produto"
         actions={<Button><Plus className="h-4 w-4" />Convidar usuário</Button>}

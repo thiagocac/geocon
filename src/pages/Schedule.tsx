@@ -88,6 +88,7 @@ export function Schedule() {
   return (
     <Layout>
       <PageHeader
+        kicker="Contrato · Cronograma"
         title="Cronograma físico-financeiro"
         subtitle="Defina o valor previsto por mês. O realizado vem automaticamente das medições."
         backTo={`/contratos/${id}`} backLabel="Contrato"

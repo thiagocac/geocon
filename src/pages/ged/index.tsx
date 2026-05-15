@@ -25,6 +25,7 @@ import { Layout } from '../../components/layout/Layout';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { StatusPill } from '../../components/ui/StatusPill';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Field, Select } from '../../components/ui/FormField';
@@ -100,6 +101,7 @@ export function Ged() {
   return (
     <Layout>
       <PageHeader
+        kicker="GED · DataBook"
         title="GED / DataBook"
         subtitle="Documentos do contrato, versionamento, distribuição (GRD) e exportação"
         actions={
@@ -218,7 +220,7 @@ export function Ged() {
                     <td>{d.revisao_atual || '0'}</td>
                     <td>{d.versions_count}</td>
                     <td>{d.file_size ? bytes(d.file_size) : '—'}</td>
-                    <td><Badge tone={st.tone}>{st.label}</Badge></td>
+                    <td><StatusPill tone={st.tone}>{st.label}</StatusPill></td>
                     <td className="text-right">
                       <Link to={`documentos/${d.id}`} className="text-navy underline-offset-2 hover:underline">Ver</Link>
                     </td>
@@ -1038,7 +1040,7 @@ export function GedDocument() {
                 <h2 className="mt-1 text-lg font-semibold dark:text-slate-100">{doc.title}</h2>
                 {doc.description && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{doc.description}</p>}
               </div>
-              <Badge tone={st.tone}>{st.label}</Badge>
+              <StatusPill tone={st.tone}>{st.label}</StatusPill>
             </div>
 
             <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">

@@ -22,7 +22,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <Topbar onMenuClick={() => setSidebarOpen(true)} />
       <main id="main" className="pt-16 lg:pl-64">
-        <div className="mx-auto max-w-7xl p-4 lg:p-8">{children}</div>
+        <div className="mx-auto max-w-[1400px] p-4 lg:p-8">{children}</div>
       </main>
     </div>
   );

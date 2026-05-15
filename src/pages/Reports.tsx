@@ -145,6 +145,7 @@ export function Reports() {
   return (
     <Layout>
       <PageHeader
+        kicker="Análise · Relatórios"
         title="Relatórios"
         subtitle="6 relatórios operacionais consolidados — visualização inline ou download em CSV (compatível Excel)."
       />

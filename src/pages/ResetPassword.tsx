@@ -33,7 +33,12 @@ export function ResetPassword() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-navy via-purple to-magenta p-6">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-elevated dark:bg-card-dark">
-        <img src="/logos/logo-color.svg" className="mx-auto h-12" alt="geoCon" />
+        <img
+          src="/logos/logo-color.png"
+          srcSet="/logos/logo-color.png 1x, /logos/logo-color@2x.png 2x"
+          className="mx-auto h-12 w-auto"
+          alt="geoCon"
+        />
         <h1 className="mt-6 text-center text-xl font-bold text-slate-900 dark:text-slate-100">Recuperar senha</h1>
         <p className="mt-1 text-center text-sm text-slate-500 dark:text-slate-400">
           Enviaremos um link de redefinição para o seu e-mail.

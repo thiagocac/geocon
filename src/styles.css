@@ -56,7 +56,7 @@
 @layer components {
   /* Botão padrão (alinhado com RDO) */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
     @apply btn bg-navy text-white hover:bg-navy-900;
@@ -129,4 +129,57 @@
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
+}
+
+/* ============================================================================
+   Density modes — DS Consulte GEO
+   Atributo `data-density` no <html>. 3 modos: compact / comfortable (default) /
+   spacious. Componentes não carregam size props — herdam.
+   ========================================================================== */
+
+/* Compact: dashboards, listas densas, telas operacionais com muita data */
+:root[data-density="compact"] .input {
+  @apply px-2.5 py-1.5 text-[13px];
+}
+:root[data-density="compact"] .table th {
+  @apply px-2.5 py-1.5;
+}
+:root[data-density="compact"] .table td {
+  @apply px-2.5 py-1.5;
+}
+:root[data-density="compact"] .label {
+  @apply text-[9px];
+}
+:root[data-density="compact"] .btn {
+  @apply px-3 py-1.5 text-[13px];
+}
+:root[data-density="compact"] .surface {
+  @apply rounded-lg;
+}
+/* Padding interno de cards reduzido em compact (via componente Card.p-N classes) */
+:root[data-density="compact"] [data-density-pad] {
+  padding: 0.75rem 1rem;
+}
+
+/* Spacious: telas confortáveis, executivas, com pouco dado por viewport */
+:root[data-density="spacious"] .input {
+  @apply px-4 py-3 text-[15px];
+}
+:root[data-density="spacious"] .table th {
+  @apply px-4 py-4;
+}
+:root[data-density="spacious"] .table td {
+  @apply px-4 py-3.5;
+}
+:root[data-density="spacious"] .btn {
+  @apply px-5 py-3 text-[15px];
+}
+:root[data-density="spacious"] [data-density-pad] {
+  padding: 1.5rem 2rem;
+}
+
+/* Touch target enforcement — WCAG 2.2 AA (DS exige ≥ 44px) */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
 }

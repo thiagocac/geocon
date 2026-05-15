@@ -11,6 +11,7 @@ import { Layout } from '../components/layout/Layout';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { StatusPill } from '../components/ui/StatusPill';
 import { Button } from '../components/ui/Button';
 import { Empty, ErrorState, Skeleton } from '../components/ui/Stat';
 
@@ -46,6 +47,7 @@ export function Measurements() {
   return (
     <Layout>
       <PageHeader
+        kicker="Operação · Medições"
         title="Medições"
         subtitle="Boletins por período · validação · aprovação · emissão"
         backTo={`/contratos/${id}`}
@@ -106,7 +108,7 @@ export function Measurements() {
                       <td className="text-right tabular font-medium">{brl(m.valor_liquido)}</td>
                       <td className="text-right tabular text-error">{brl(m.valor_glosado)}</td>
                       <td className="text-right tabular text-warning">{brl(m.valor_retido)}</td>
-                      <td><Badge tone={s.tone}>{s.label}</Badge></td>
+                      <td><StatusPill tone={s.tone}>{s.label}</StatusPill></td>
                       <td className="text-right">
                         <Link to={m.id} className="text-xs font-semibold text-navy hover:underline dark:text-slate-200">
                           Abrir

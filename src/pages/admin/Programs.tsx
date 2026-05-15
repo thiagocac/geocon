@@ -27,6 +27,7 @@ export function AdminPrograms() {
   return (
     <Layout>
       <PageHeader
+        kicker="Administração · Programas"
         title="Programas"
         subtitle="Programas governamentais ou linhas de financiamento. Contratos vinculados a um programa aparecem agrupados na Visão por programa."
         backTo="/dashboard" backLabel="Dashboard"

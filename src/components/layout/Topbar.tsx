@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { NotificationDropdown } from './NotificationDropdown';
 import { CommandPalette } from './CommandPalette';
 import { ThemeToggle } from './ThemeToggle';
+import { DensityToggle } from './DensityToggle';
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 import { SKIP_AUTH } from '../../lib/supabase';
 
@@ -155,12 +156,13 @@ export function Topbar({ onMenuClick }: Props) {
             <Search className="h-5 w-5 text-slate-600 dark:text-slate-300" />
           </button>
 
+          <DensityToggle />
           <ThemeToggle />
           <NotificationDropdown />
 
           <Link
             to="/me"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-navy text-sm font-bold text-white hover:bg-navy-900"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-sm font-bold text-white hover:bg-navy-900"
             title={member?.nome || 'Perfil'}
           >
             {initials}

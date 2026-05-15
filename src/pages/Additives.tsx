@@ -16,6 +16,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { StatusPill } from '../components/ui/StatusPill';
 import { Modal } from '../components/ui/Modal';
 import { Field, Select } from '../components/ui/FormField';
 import { Empty, Skeleton } from '../components/ui/Stat';
@@ -90,6 +91,7 @@ export function Additives() {
   return (
     <Layout>
       <PageHeader
+        kicker="Operação · Termos aditivos"
         title="Aditivos"
         subtitle="Acréscimo, supressão, prazo e itens não previstos aprovados — Lei 14.133/2021"
         backTo={`/contratos/${id}`}
@@ -166,7 +168,7 @@ export function Additives() {
                     <td className="text-right tabular text-success">{brl(a.valor_acrescimo)}</td>
                     <td className="text-right tabular text-error">{brl(a.valor_decrescimo)}</td>
                     <td className="text-right tabular font-medium">{brl(liquido)}</td>
-                    <td><Badge tone={s.tone}>{s.label}</Badge></td>
+                    <td><StatusPill tone={s.tone}>{s.label}</StatusPill></td>
                     <td>
                       <Link to={a.id} className="text-xs font-semibold text-navy hover:underline dark:text-slate-200">Abrir</Link>
                     </td>

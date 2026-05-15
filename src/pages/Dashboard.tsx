@@ -9,6 +9,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Stat, Empty, ErrorState, Progress, Skeleton } from '../components/ui/Stat';
 import { Badge } from '../components/ui/Badge';
+import { StatusPill } from '../components/ui/StatusPill';
 import { Button } from '../components/ui/Button';
 
 export function Dashboard() {
@@ -136,7 +137,7 @@ export function Dashboard() {
                         {c.municipio}/{c.uf} · {c.contratada_nome}
                       </p>
                     </div>
-                    <Badge tone={status.tone}>{status.label}</Badge>
+                    <StatusPill tone={status.tone}>{status.label}</StatusPill>
                   </div>
                   <div>
                     <Progress value={c.percentual_financeiro} />

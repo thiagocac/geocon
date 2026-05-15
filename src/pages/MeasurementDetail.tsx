@@ -11,6 +11,7 @@ import { Layout } from '../components/layout/Layout';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { StatusPill } from '../components/ui/StatusPill';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Field } from '../components/ui/FormField';
@@ -120,13 +121,14 @@ export function MeasurementDetail() {
   return (
     <Layout>
       <PageHeader
+        kicker="Medição · Detalhe"
         title={`Medição n.º ${m.numero}${m.complementar_numero ? `.${m.complementar_numero}` : ''}`}
         subtitle={`${dt(m.periodo_inicio)} a ${dt(m.periodo_fim)} · ${m.tipo}`}
         backTo={`/contratos/${id}/medicoes`}
         backLabel="Medições"
         actions={
           <div className="flex items-center gap-2">
-            <Badge tone={status.tone}>{status.label}</Badge>
+            <StatusPill tone={status.tone}>{status.label}</StatusPill>
             {isPreliminar && (
               <>
                 <Button variant="outline" size="sm" loading={busy === 'copy-balance'}

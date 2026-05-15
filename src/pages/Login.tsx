@@ -83,7 +83,12 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-navy via-purple to-magenta p-6">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-elevated dark:bg-card-dark">
         <div className="text-center">
-          <img src="/logos/logo-color.svg" className="mx-auto h-16" alt="geoCon" />
+          <img
+            src="/logos/logo-color.png"
+            srcSet="/logos/logo-color.png 1x, /logos/logo-color@2x.png 2x"
+            className="mx-auto h-16 w-auto"
+            alt="geoCon"
+          />
           <h1 className="mt-6 text-2xl font-bold text-slate-900 dark:text-slate-100">
             <span className="text-magenta">°</span>geoCon
           </h1>

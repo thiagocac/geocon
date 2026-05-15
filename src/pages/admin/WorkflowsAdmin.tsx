@@ -51,6 +51,7 @@ export function WorkflowsAdmin() {
   return (
     <Layout>
       <PageHeader
+        kicker="Administração · Workflows"
         title="Workflows e delegações"
         subtitle="Templates configuráveis de aprovação + delegações temporárias"
       />

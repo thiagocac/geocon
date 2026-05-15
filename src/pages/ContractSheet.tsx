@@ -30,6 +30,7 @@ export function ContractSheet() {
   return (
     <Layout>
       <PageHeader
+        kicker="Contrato · Planilha SOV"
         title="Planilha contratual / SOV"
         subtitle="Versionamento, saldo em tempo real, bloqueio pós-medição e vínculo EAP"
         backTo={`/contratos/${id}`}

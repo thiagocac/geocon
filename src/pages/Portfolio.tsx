@@ -45,6 +45,7 @@ export function Portfolio() {
   return (
     <Layout>
       <PageHeader
+        kicker="Visão executiva · Programas"
         title="Carteira de contratos"
         subtitle="Visão consolidada por programa, órgão e município. Painel de aditivos consolidados."
       />

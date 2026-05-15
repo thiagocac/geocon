@@ -8,7 +8,7 @@ import { CONTRACT_STATUS, statusFor } from '../lib/status';
 import { Layout } from '../components/layout/Layout';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+import { StatusPill } from '../components/ui/StatusPill';
 import { Button } from '../components/ui/Button';
 import { Empty, ErrorState, Skeleton } from '../components/ui/Stat';
 export function Contracts() {
@@ -126,7 +126,7 @@ export function Contracts() {
                       <td className="text-right tabular text-sm">{num(c.percentual_financeiro)}%</td>
                       <td className="text-right tabular text-sm">{brl(c.saldo_contratual)}</td>
                       <td>
-                        <Badge tone={status.tone}>{status.label}</Badge>
+                        <StatusPill tone={status.tone}>{status.label}</StatusPill>
                       </td>
                     </tr>
                   );

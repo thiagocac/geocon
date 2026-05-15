@@ -209,7 +209,12 @@ export function PublicValidation() {
     <div className="min-h-screen bg-gradient-to-br from-navy via-purple to-magenta">
       <div className="mx-auto max-w-3xl px-4 py-12">
         <div className="mb-6 flex items-center gap-2 text-white">
-          <img src="/logos/logo-white.svg" alt="" className="h-10" />
+          <img
+            src="/logos/logo-white.png"
+            srcSet="/logos/logo-white.png 1x, /logos/logo-white@2x.png 2x"
+            alt="geoCon"
+            className="h-10 w-auto"
+          />
           <div>
             <h1 className="text-xl font-bold"><span className="text-magenta-200">°</span>geoCon</h1>
             <p className="text-xs text-white/70">{PRODUCT_LONG_NAME}</p>
