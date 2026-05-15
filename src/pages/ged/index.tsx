@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, FolderTree, Send, Download, Tag, BookOpen,
   Pencil, Trash2, ChevronRight, ChevronDown, Layers, Save,
-  FileText, History, ShieldCheck, Eye, FileUp, ScanText,
+  FileText, History, ShieldCheck, Eye, FileUp, ScanText, Printer,
 } from 'lucide-react';
 import { useState, useMemo, type FormEvent } from 'react';
 import {
@@ -14,7 +14,7 @@ import {
   upsertGedControlledTermValue, deleteGedControlledTermValue,
   listGedMasterList, getGedDocument, listGedDocumentVersions,
   listGedAccessLog, getGedDocumentUrl, logGedAccess, updateGedDocumentStatus,
-  extractTextFromVersion,
+  extractTextFromVersion, printGedLabels,
   type GedCategory, type GedMetadataField, type GedControlledTerm, type GedControlledTermValue,
   type GedDocument as GedDocumentType, type GedDocumentVersion,
 } from '../../lib/api';
@@ -47,6 +47,9 @@ export function Ged() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [labelsBusy, setLabelsBusy] = useState(false);
+  const [labelsErr, setLabelsErr] = useState<string | null>(null);
 
   // Debounce para não pingar backend a cada tecla
   useMemo(() => {
@@ -63,6 +66,36 @@ export function Ged() {
       query: debouncedSearch || null,
     }),
   });
+
+  function toggleOne(id: string) {
+    setSelectedIds((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    if (selectedIds.size === data.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(data.map((d) => d.id)));
+    }
+  }
+  async function handlePrintLabels() {
+    setLabelsErr(null);
+    setLabelsBusy(true);
+    try {
+      await printGedLabels(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    } catch (e) {
+      setLabelsErr(humanizeError(e));
+    } finally {
+      setLabelsBusy(false);
+    }
+  }
+
+  const allChecked = data.length > 0 && selectedIds.size === data.length;
+  const someChecked = selectedIds.size > 0 && selectedIds.size < data.length;
 
   return (
     <Layout>
@@ -114,6 +147,27 @@ export function Ged() {
         )}
       </Card>
 
+      {selectedIds.size > 0 && (
+        <Card className="mb-4 flex items-center justify-between gap-3 border-navy/30 bg-navy/5 px-4 py-3 dark:border-purple/30 dark:bg-purple/10">
+          <p className="text-sm font-medium dark:text-slate-100">
+            {selectedIds.size} documento(s) selecionado(s) — até 48 por impressão
+          </p>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>Limpar</Button>
+            <Button size="sm" onClick={handlePrintLabels}
+                    loading={labelsBusy} disabled={selectedIds.size > 48}>
+              <Printer className="h-3.5 w-3.5" />
+              Imprimir etiquetas ({selectedIds.size})
+            </Button>
+          </div>
+        </Card>
+      )}
+      {labelsErr && (
+        <div className="mb-4 rounded-lg border border-error/30 bg-error/5 px-4 py-3 text-sm text-error">
+          {labelsErr}
+        </div>
+      )}
+
       {isLoading && <Card className="p-6"><Skeleton className="h-64" /></Card>}
       {!isLoading && data.length === 0 && (
         <Empty
@@ -128,14 +182,29 @@ export function Ged() {
         <Card className="overflow-hidden">
           <table className="table">
             <thead><tr>
+              <th className="w-10">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  ref={(el) => { if (el) el.indeterminate = someChecked; }}
+                  onChange={toggleAll}
+                  aria-label="Selecionar todos"
+                />
+              </th>
               <th>Código</th><th>Título</th><th>Categoria</th><th>Contrato</th>
               <th>Rev.</th><th>Versões</th><th>Tamanho</th><th>Status</th><th />
             </tr></thead>
             <tbody>
               {data.map((d) => {
                 const st = statusFor(d.status || 'em_elaboracao', GED_STATUS);
+                const isSel = selectedIds.has(d.id);
                 return (
-                  <tr key={d.id}>
+                  <tr key={d.id} className={isSel ? 'bg-navy/5 dark:bg-purple/10' : ''}>
+                    <td>
+                      <input type="checkbox" checked={isSel}
+                             onChange={() => toggleOne(d.id)}
+                             aria-label={`Selecionar ${d.title}`} />
+                    </td>
                     <td className="font-mono text-xs">{d.nomenclature_code || d.numero || '—'}</td>
                     <td className="max-w-xs">
                       <div className="truncate font-medium">{d.title}</div>

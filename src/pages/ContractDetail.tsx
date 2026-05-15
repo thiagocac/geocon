@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -7,6 +8,7 @@ import {
 import { getContract, getSaldoAlert } from '../lib/api';
 import { brl, num, dt } from '../lib/format';
 import { CONTRACT_STATUS, statusFor } from '../lib/status';
+import { useRecentItems } from '../hooks/useRecentItems';
 import { Layout } from '../components/layout/Layout';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
@@ -16,11 +18,25 @@ import { Button } from '../components/ui/Button';
 
 export function ContractDetail() {
   const { id = '' } = useParams();
+  const { push: pushRecent } = useRecentItems();
   const { data: c, isLoading, isError, error } = useQuery({
     queryKey: ['contract', id],
     queryFn: () => getContract(id),
     enabled: !!id,
   });
+
+  // Marca como recente quando carregado
+  useEffect(() => {
+    if (c?.id && c.numero) {
+      pushRecent({
+        id: c.id,
+        type: 'contract',
+        label: c.numero,
+        hint: c.objeto,
+        to: `/contratos/${c.id}`,
+      });
+    }
+  }, [c?.id, c?.numero, c?.objeto, pushRecent]);
   const { data: saldoAlert } = useQuery({
     queryKey: ['saldo-alert', id],
     queryFn: () => getSaldoAlert(id),

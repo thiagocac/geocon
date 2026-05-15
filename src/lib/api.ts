@@ -3096,3 +3096,626 @@ export async function consumeMagicLink(input: {
     measurement_id: json.result?.measurement_id || '',
   };
 }
+
+// =============================================================================
+// Item 11 — submit, payment, bulk-decide, reports, labels, workflow status
+// =============================================================================
+
+export type ReportVariant = 'carteira' | 'pendencias' | 'curva_s' | 'glosas' | 'top_glosas' | 'health';
+
+export interface ReportResponse<T = Record<string, unknown>> {
+  ok: boolean;
+  meta: { variant: ReportVariant; total_rows: number; generated_at: string; contract_id?: string | null };
+  data: T[];
+}
+
+export interface MeasurementWorkflowStatus {
+  measurement_id: string;
+  tenant_id: string;
+  contract_id: string;
+  measurement_status: string;
+  total_steps: number;
+  approved_steps: number;
+  pending_steps: number;
+  returned_steps: number;
+  rejected_steps: number;
+  pct_concluido: number;
+  next_step_ordem: number | null;
+  next_step_due_at: string | null;
+  proximo_step_sla: 'sem_sla' | 'atrasado' | 'urgente' | 'no_prazo';
+}
+
+/** Submete uma medição (rascunho/preliminar/devolvida → em_aprovacao). */
+export async function submitMeasurement(measurementId: string): Promise<{
+  measurement_id: string;
+  new_status: string;
+  items: number;
+  pending_validations: number;
+  workflow_steps_created: number;
+}> {
+  if (SKIP_AUTH) {
+    return { measurement_id: measurementId, new_status: 'em_aprovacao', items: 0, pending_validations: 0, workflow_steps_created: 4 };
+  }
+  const res = await callFn<{ ok: boolean; result?: Record<string, unknown> }>('submit-measurement', {
+    measurement_id: measurementId,
+  });
+  const r = (res?.result ?? {}) as Record<string, unknown>;
+  return {
+    measurement_id: String(r.measurement_id || measurementId),
+    new_status: String(r.new_status || 'em_aprovacao'),
+    items: Number(r.items || 0),
+    pending_validations: Number(r.pending_validations || 0),
+    workflow_steps_created: Number(r.workflow_steps_created || 0),
+  };
+}
+
+/** Registra evento de pagamento de uma medição aprovada/paga. */
+export async function registerPaymentEvent(input: {
+  measurement_id: string;
+  valor_pago: number;
+  data_pagamento: string;
+  numero_ordem_bancaria?: string | null;
+  nota_fiscal?: string | null;
+  observacao?: string | null;
+}): Promise<string> {
+  if (SKIP_AUTH) {
+    console.info('[demo] registerPaymentEvent', input);
+    return 'pay-' + Math.random().toString(36).slice(2, 10);
+  }
+  const res = await callFn<{ ok: boolean; event_id?: string }>('register-payment', {
+    measurement_id: input.measurement_id,
+    valor_pago: input.valor_pago,
+    data_pagamento: input.data_pagamento,
+    numero_ordem_bancaria: input.numero_ordem_bancaria ?? null,
+    nota_fiscal: input.nota_fiscal ?? null,
+    observacao: input.observacao ?? null,
+  });
+  return String(res?.event_id || '');
+}
+
+/** Decide múltiplos steps de uma vez (mesma ação, mesmo comentário). */
+export async function bulkDecideApprovalSteps(input: {
+  step_ids: string[];
+  action: 'aprovar' | 'devolver' | 'reprovar';
+  comment?: string;
+  signature_method?: string | null;
+}): Promise<{ processed: number; failed: number; errors: Array<{ step_id: string; error: string }> }> {
+  if (SKIP_AUTH) {
+    return { processed: input.step_ids.length, failed: 0, errors: [] };
+  }
+  checkSupabase();
+  const { data, error } = await supabase.rpc('bulk_decide_approval_steps', {
+    p_step_ids: input.step_ids,
+    p_action: input.action,
+    p_comment: input.comment || null,
+    p_signature_method: input.signature_method || null,
+  });
+  fail(error);
+  const d = (data as Record<string, unknown>) || {};
+  return {
+    processed: Number(d.processed || 0),
+    failed: Number(d.failed || 0),
+    errors: (d.errors as Array<{ step_id: string; error: string }>) || [],
+  };
+}
+
+/** Busca um relatório como JSON. */
+export async function fetchReport<T = Record<string, unknown>>(
+  variant: ReportVariant,
+  contractId?: string | null,
+): Promise<ReportResponse<T>> {
+  if (SKIP_AUTH) {
+    return { ok: true, meta: { variant, total_rows: 0, generated_at: new Date().toISOString(), contract_id: contractId ?? null }, data: [] };
+  }
+  const res = await callFn<ReportResponse<T>>('generate-report', {
+    variant, format: 'json', contract_id: contractId ?? null,
+  });
+  return res;
+}
+
+/** Baixa o CSV de um relatório (aciona download no navegador). */
+export async function downloadReportCsv(variant: ReportVariant, contractId?: string | null): Promise<void> {
+  if (SKIP_AUTH) {
+    console.info('[demo] downloadReportCsv', variant, contractId);
+    return;
+  }
+  checkSupabase();
+  const { data, error } = await supabase.functions.invoke('generate-report', {
+    body: { variant, format: 'csv', contract_id: contractId ?? null },
+  });
+  fail(error);
+  // supabase-js auto-detects text/csv → string; também aceita Blob direto
+  const csv = typeof data === 'string' ? data : await (data as Blob).text();
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objUrl;
+  a.download = `${variant}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
+}
+
+/** Gera PDF de etiquetas GED (abre em nova aba). */
+export async function printGedLabels(documentIds: string[]): Promise<void> {
+  if (SKIP_AUTH) {
+    console.info('[demo] printGedLabels', documentIds);
+    return;
+  }
+  if (documentIds.length === 0) throw new Error('Selecione ao menos 1 documento');
+  if (documentIds.length > 48) throw new Error('Máximo de 48 etiquetas por requisição');
+  checkSupabase();
+  const { data, error } = await supabase.functions.invoke('generate-labels-pdf', {
+    body: { document_ids: documentIds },
+  });
+  fail(error);
+  // application/pdf → Blob
+  const blob = data instanceof Blob ? data : new Blob([data as ArrayBuffer], { type: 'application/pdf' });
+  const objUrl = URL.createObjectURL(blob);
+  window.open(objUrl, '_blank');
+  setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+}
+
+/** Lê o status do workflow de uma medição (view v_measurement_workflow_status). */
+export async function getMeasurementWorkflowStatus(measurementId: string): Promise<MeasurementWorkflowStatus | null> {
+  if (SKIP_AUTH) return null;
+  checkSupabase();
+  const { data, error } = await supabase
+    .from('v_measurement_workflow_status')
+    .select('*')
+    .eq('measurement_id', measurementId)
+    .maybeSingle();
+  fail(error);
+  return (data as MeasurementWorkflowStatus | null) || null;
+}
+
+// =============================================================================
+// Tracking / AdditiveDetail helpers (V4)
+// =============================================================================
+
+export interface ContractItemRecord {
+  id: string;
+  contract_id: string;
+  parent_id: string | null;
+  discipline_id: string | null;
+  lot_id: string | null;
+  codigo: string;
+  descricao: string;
+  unidade: string | null;
+  nivel: number;
+  ordem: number;
+  quantidade_contratada: number;
+  quantidade_aditada: number;
+  quantidade_medida_acumulada: number;
+  preco_unitario: number;
+  bdi_percentual: number;
+  fonte_referencia: string | null;
+  codigo_referencia: string | null;
+  is_title: boolean;
+  is_extra: boolean;
+  active: boolean;
+  data_liberacao_medicao: string | null;
+}
+
+export interface ItemMeasurementRow {
+  measurement_id: string;
+  measurement_numero: number;
+  complementar_numero: number;
+  measurement_status: string;
+  periodo_inicio: string;
+  periodo_fim: string;
+  measurement_item_id: string;
+  quantidade_periodo: number;
+  quantidade_acumulada_antes: number;
+  quantidade_acumulada_incl_periodo: number;
+  valor_periodo: number;
+  valor_glosado: number;
+  valor_liquido: number;
+  validacao_status: string;
+}
+
+export interface AdditiveItemRow {
+  id: string;
+  additive_id: string;
+  contract_item_id: string | null;
+  tipo: 'acrescimo' | 'decrescimo' | 'extra_novo';
+  codigo: string | null;
+  descricao: string;
+  unidade: string | null;
+  quantidade: number;
+  preco_unitario: number;
+  valor_total: number;
+}
+
+export interface AdditiveDetailRecord {
+  id: string;
+  contract_id: string;
+  numero: number;
+  tipo: string;
+  status: string;
+  data_solicitacao: string;
+  data_aprovacao: string | null;
+  valor_acrescimo: number;
+  valor_decrescimo: number;
+  valor_liquido: number;
+  prazo_execucao_acrescimo_dias: number;
+  prazo_vigencia_acrescimo_dias: number;
+  percentual_sobre_inicial: number | null;
+  justificativa_valor: string | null;
+  justificativa_prazo: string | null;
+  legal_basis: string | null;
+  created_at: string;
+}
+
+const MOCK_CONTRACT_ITEM: ContractItemRecord = {
+  id: 'ci-demo', contract_id: 'c1', parent_id: null, discipline_id: null, lot_id: null,
+  codigo: '3.1', descricao: 'Concreto estrutural C30 — pilares', unidade: 'm³',
+  nivel: 2, ordem: 1,
+  quantidade_contratada: 850, quantidade_aditada: 45, quantidade_medida_acumulada: 612,
+  preco_unitario: 620, bdi_percentual: 22.5,
+  fonte_referencia: 'SINAPI', codigo_referencia: '92873',
+  is_title: false, is_extra: false, active: true,
+  data_liberacao_medicao: '2024-05-01',
+};
+
+const MOCK_ITEM_MEASUREMENTS: ItemMeasurementRow[] = [
+  { measurement_id: 'm6', measurement_numero: 6, complementar_numero: 0, measurement_status: 'paga',
+    periodo_inicio: '2024-09-01', periodo_fim: '2024-09-30', measurement_item_id: 'mi6',
+    quantidade_periodo: 120, quantidade_acumulada_antes: 80, quantidade_acumulada_incl_periodo: 200,
+    valor_periodo: 74400, valor_glosado: 22300, valor_liquido: 52100, validacao_status: 'ok' },
+  { measurement_id: 'm7', measurement_numero: 7, complementar_numero: 0, measurement_status: 'paga',
+    periodo_inicio: '2024-10-01', periodo_fim: '2024-10-31', measurement_item_id: 'mi7',
+    quantidade_periodo: 140, quantidade_acumulada_antes: 200, quantidade_acumulada_incl_periodo: 340,
+    valor_periodo: 86800, valor_glosado: 0, valor_liquido: 86800, validacao_status: 'ok' },
+  { measurement_id: 'm8', measurement_numero: 8, complementar_numero: 0, measurement_status: 'aprovada',
+    periodo_inicio: '2024-11-01', periodo_fim: '2024-11-30', measurement_item_id: 'mi8',
+    quantidade_periodo: 152, quantidade_acumulada_antes: 340, quantidade_acumulada_incl_periodo: 492,
+    valor_periodo: 94240, valor_glosado: 0, valor_liquido: 94240, validacao_status: 'ok' },
+];
+
+const MOCK_ADDITIVE_ITEMS: AdditiveItemRow[] = [
+  { id: 'ai1', additive_id: 'a1', contract_item_id: 'ci-demo', tipo: 'acrescimo',
+    codigo: '3.1', descricao: 'Concreto estrutural C30 — pilares', unidade: 'm³',
+    quantidade: 45, preco_unitario: 620, valor_total: 27900 },
+  { id: 'ai2', additive_id: 'a1', contract_item_id: null, tipo: 'extra_novo',
+    codigo: 'EXT-001', descricao: 'Reforço estrutural — fundação adicional P12', unidade: 'vb',
+    quantidade: 1, preco_unitario: 422100, valor_total: 422100 },
+];
+
+const MOCK_ADDITIVE_DETAIL: AdditiveDetailRecord = {
+  id: 'a1', contract_id: 'c1', numero: 1, tipo: 'valor', status: 'aprovado',
+  data_solicitacao: '2025-07-12', data_aprovacao: '2025-08-10',
+  valor_acrescimo: 450_000, valor_decrescimo: 0, valor_liquido: 450_000,
+  prazo_execucao_acrescimo_dias: 45, prazo_vigencia_acrescimo_dias: 60,
+  percentual_sobre_inicial: 3.6,
+  justificativa_valor: 'Inclusão de itens não previstos no PE: reforço estrutural P12 e ajuste de quantidade de concreto C30.',
+  justificativa_prazo: 'Necessidade técnica de aguardar cura completa do reforço antes de prosseguir para próxima etapa.',
+  legal_basis: 'Lei 14.133/2021, art. 124',
+  created_at: '2025-07-12T10:00:00Z',
+};
+
+/** Busca um contract_item completo. */
+export async function getContractItem(itemId: string): Promise<ContractItemRecord | null> {
+  if (SKIP_AUTH) return { ...MOCK_CONTRACT_ITEM, id: itemId };
+  checkSupabase();
+  const r = await supabase.from('contract_items').select('*').eq('id', itemId).is('deleted_at', null).maybeSingle();
+  fail(r.error);
+  return (r.data as ContractItemRecord | null) || null;
+}
+
+/** Lista as participações do item em medições (com dados da medição pai). */
+export async function listMeasurementItemsByContractItem(contractItemId: string): Promise<ItemMeasurementRow[]> {
+  if (SKIP_AUTH) return MOCK_ITEM_MEASUREMENTS;
+  checkSupabase();
+  const r = await supabase
+    .from('measurement_items')
+    .select(`
+      id,
+      quantidade_periodo, quantidade_acumulada_antes, quantidade_acumulada_incl_periodo,
+      valor_periodo, valor_glosado, valor_liquido, validacao_status,
+      measurements (id, numero, complementar_numero, status, periodo_inicio, periodo_fim, deleted_at)
+    `)
+    .eq('contract_item_id', contractItemId)
+    .is('deleted_at', null);
+  fail(r.error);
+  type Row = {
+    id: string;
+    quantidade_periodo: number | null;
+    quantidade_acumulada_antes: number | null;
+    quantidade_acumulada_incl_periodo: number | null;
+    valor_periodo: number | null;
+    valor_glosado: number | null;
+    valor_liquido: number | null;
+    validacao_status: string;
+    measurements: {
+      id: string;
+      numero: number;
+      complementar_numero: number;
+      status: string;
+      periodo_inicio: string;
+      periodo_fim: string;
+      deleted_at: string | null;
+    } | null;
+  };
+  return ((r.data || []) as unknown as Row[])
+    .filter((x) => x.measurements && !x.measurements.deleted_at)
+    .map((x) => ({
+      measurement_id: x.measurements!.id,
+      measurement_numero: x.measurements!.numero,
+      complementar_numero: x.measurements!.complementar_numero,
+      measurement_status: x.measurements!.status,
+      periodo_inicio: x.measurements!.periodo_inicio,
+      periodo_fim: x.measurements!.periodo_fim,
+      measurement_item_id: x.id,
+      quantidade_periodo: Number(x.quantidade_periodo || 0),
+      quantidade_acumulada_antes: Number(x.quantidade_acumulada_antes || 0),
+      quantidade_acumulada_incl_periodo: Number(x.quantidade_acumulada_incl_periodo || 0),
+      valor_periodo: Number(x.valor_periodo || 0),
+      valor_glosado: Number(x.valor_glosado || 0),
+      valor_liquido: Number(x.valor_liquido || 0),
+      validacao_status: x.validacao_status,
+    }))
+    .sort((a, b) => (a.periodo_fim < b.periodo_fim ? -1 : a.periodo_fim > b.periodo_fim ? 1 : 0));
+}
+
+/** Busca um aditivo completo. */
+export async function getAdditive(additiveId: string): Promise<AdditiveDetailRecord | null> {
+  if (SKIP_AUTH) return { ...MOCK_ADDITIVE_DETAIL, id: additiveId };
+  checkSupabase();
+  const r = await supabase.from('additives').select('*').eq('id', additiveId).is('deleted_at', null).maybeSingle();
+  fail(r.error);
+  return (r.data as AdditiveDetailRecord | null) || null;
+}
+
+/** Lista itens de um aditivo. */
+export async function listAdditiveItems(additiveId: string): Promise<AdditiveItemRow[]> {
+  if (SKIP_AUTH) return MOCK_ADDITIVE_ITEMS;
+  checkSupabase();
+  const r = await supabase.from('additive_items').select('*').eq('additive_id', additiveId).is('deleted_at', null).order('created_at');
+  fail(r.error);
+  return (r.data || []) as AdditiveItemRow[];
+}
+
+// =============================================================================
+// Generated reports history + Audit log (V5)
+// =============================================================================
+
+export interface GeneratedReport {
+  id: string;
+  contract_id: string | null;
+  report_type: string;
+  title: string;
+  storage_path: string | null;
+  mime_type: string | null;
+  filters: Record<string, unknown>;
+  status: 'processando' | 'gerado' | 'erro' | 'cancelado';
+  generated_by: string | null;
+  generated_at: string;
+  created_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  tenant_id: string;
+  actor_id: string | null;
+  entity_type: string;
+  entity_id: string | null;
+  action: string;
+  before_value: Record<string, unknown> | null;
+  after_value: Record<string, unknown> | null;
+  source: string | null;
+  severity: 'info' | 'warn' | 'error';
+  metadata: Record<string, unknown>;
+  created_at: string;
+  actor?: { nome: string; email: string } | null;
+}
+
+const MOCK_GENERATED_REPORTS: GeneratedReport[] = [
+  { id: 'gr1', contract_id: 'c1', report_type: 'carteira',
+    title: 'Carteira — Outubro/2025', storage_path: '/reports/c1-carteira-202510.pdf',
+    mime_type: 'application/pdf', filters: {}, status: 'gerado',
+    generated_by: 'm1', generated_at: '2025-10-31T18:00:00Z', created_at: '2025-10-31T18:00:00Z' },
+  { id: 'gr2', contract_id: 'c1', report_type: 'glosas',
+    title: 'Mapa de glosas — Outubro/2025', storage_path: '/reports/c1-glosas-202510.csv',
+    mime_type: 'text/csv', filters: {}, status: 'gerado',
+    generated_by: 'm1', generated_at: '2025-10-31T18:05:00Z', created_at: '2025-10-31T18:05:00Z' },
+];
+
+const MOCK_AUDIT_LOG: AuditLogEntry[] = [
+  { id: 'a1', tenant_id: 't', actor_id: 'm1', entity_type: 'measurement', entity_id: 'med-13',
+    action: 'submit', before_value: { status: 'rascunho' }, after_value: { status: 'em_aprovacao' },
+    source: 'submit-measurement EF', severity: 'info', metadata: { items: 7 },
+    created_at: '2025-11-12T14:23:00Z',
+    actor: { nome: 'Thiago Vieira', email: 'thiago@consultegeo.com.br' } },
+  { id: 'a2', tenant_id: 't', actor_id: 'm2', entity_type: 'additive', entity_id: 'ad-01',
+    action: 'approve', before_value: { status: 'em_aprovacao' }, after_value: { status: 'aprovado' },
+    source: 'decide_approval_step', severity: 'info', metadata: {},
+    created_at: '2025-11-10T09:15:00Z',
+    actor: { nome: 'Helena Soares', email: 'helena@arcoiris.eng.br' } },
+  { id: 'a3', tenant_id: 't', actor_id: null, entity_type: 'ged_transmittal', entity_id: 'grd-005',
+    action: 'sla_overdue', before_value: null, after_value: null,
+    source: 'check-sla-overdue (cron)', severity: 'warn', metadata: { dias_em_atraso: 12 },
+    created_at: '2025-11-08T03:00:00Z', actor: null },
+];
+
+/** Lista relatórios gerados (com filtro opcional por contrato). */
+export async function listGeneratedReports(contractId?: string | null): Promise<GeneratedReport[]> {
+  if (SKIP_AUTH) return contractId
+    ? MOCK_GENERATED_REPORTS.filter((r) => r.contract_id === contractId || !r.contract_id)
+    : MOCK_GENERATED_REPORTS;
+  checkSupabase();
+  let q = supabase.from('generated_reports').select('*').is('deleted_at', null).order('generated_at', { ascending: false }).limit(50);
+  if (contractId) q = q.eq('contract_id', contractId);
+  const r = await q;
+  fail(r.error);
+  return (r.data || []) as GeneratedReport[];
+}
+
+/** Cria URL assinada para um relatório gerado (storage). */
+export async function getGeneratedReportUrl(storagePath: string): Promise<string | null> {
+  if (SKIP_AUTH) return null;
+  checkSupabase();
+  const { data } = await supabase.storage.from('reports').createSignedUrl(storagePath, 300);
+  return data?.signedUrl ?? null;
+}
+
+/** Lista entradas do audit_log com filtros opcionais. */
+export async function listAuditLog(input: {
+  entity_type?: string | null;
+  entity_id?: string | null;
+  severity?: 'info' | 'warn' | 'error' | null;
+  limit?: number;
+} = {}): Promise<AuditLogEntry[]> {
+  if (SKIP_AUTH) {
+    let arr = MOCK_AUDIT_LOG;
+    if (input.entity_type) arr = arr.filter((a) => a.entity_type === input.entity_type);
+    if (input.entity_id) arr = arr.filter((a) => a.entity_id === input.entity_id);
+    if (input.severity) arr = arr.filter((a) => a.severity === input.severity);
+    return arr;
+  }
+  checkSupabase();
+  let q = supabase
+    .from('audit_log')
+    .select('*, actor:members(nome, email)')
+    .order('created_at', { ascending: false })
+    .limit(input.limit ?? 200);
+  if (input.entity_type) q = q.eq('entity_type', input.entity_type);
+  if (input.entity_id) q = q.eq('entity_id', input.entity_id);
+  if (input.severity) q = q.eq('severity', input.severity);
+  const r = await q;
+  fail(r.error);
+  type Row = AuditLogEntry & { actor: { nome: string; email: string }[] | null };
+  return ((r.data || []) as unknown as Row[]).map((x) => ({
+    ...x,
+    actor: Array.isArray(x.actor) && x.actor.length > 0 ? x.actor[0] : null,
+  }));
+}
+
+// =============================================================================
+// My pending approvals (V8) — agrega steps assignados ao usuário corrente
+// =============================================================================
+
+export interface PendingApprovalRow {
+  step_id: string;
+  measurement_id: string;
+  measurement_numero: number;
+  measurement_complementar: number;
+  measurement_status: string;
+  measurement_valor_liquido: number;
+  contract_id: string;
+  contract_numero: string;
+  contract_objeto: string;
+  step_ordem: number;
+  step_nome: string;
+  role_required: string;
+  due_at: string | null;
+  created_at: string;
+  dias_pendente: number;
+  sla: 'no_prazo' | 'urgente' | 'atrasado' | 'sem_sla';
+}
+
+const MOCK_PENDING_APPROVALS: PendingApprovalRow[] = [
+  { step_id: 's1', measurement_id: 'm7', measurement_numero: 7, measurement_complementar: 0,
+    measurement_status: 'em_aprovacao', measurement_valor_liquido: 412_300,
+    contract_id: 'c1', contract_numero: 'CT-2024/0042',
+    contract_objeto: 'Construção de Hospital Regional',
+    step_ordem: 2, step_nome: 'Fiscalização técnica', role_required: 'fiscal',
+    due_at: new Date(Date.now() - 86400_000).toISOString(),
+    created_at: new Date(Date.now() - 86400_000 * 5).toISOString(),
+    dias_pendente: 5, sla: 'atrasado' },
+  { step_id: 's2', measurement_id: 'm12', measurement_numero: 12, measurement_complementar: 0,
+    measurement_status: 'em_aprovacao', measurement_valor_liquido: 287_640,
+    contract_id: 'c1', contract_numero: 'CT-2024/0042',
+    contract_objeto: 'Construção de Hospital Regional',
+    step_ordem: 1, step_nome: 'Análise preliminar', role_required: 'fiscal',
+    due_at: new Date(Date.now() + 86400_000 * 2).toISOString(),
+    created_at: new Date(Date.now() - 86400_000 * 2).toISOString(),
+    dias_pendente: 2, sla: 'no_prazo' },
+  { step_id: 's3', measurement_id: 'm5', measurement_numero: 5, measurement_complementar: 1,
+    measurement_status: 'em_aprovacao', measurement_valor_liquido: 95_120,
+    contract_id: 'c2', contract_numero: 'CT-2024/0107',
+    contract_objeto: 'Reforma de escolas — Lote 3',
+    step_ordem: 2, step_nome: 'Aprovação gerencial', role_required: 'gestor_contrato',
+    due_at: new Date(Date.now() + 12 * 3600_000).toISOString(),
+    created_at: new Date(Date.now() - 86400_000 * 3).toISOString(),
+    dias_pendente: 3, sla: 'urgente' },
+];
+
+/**
+ * Lista todos os steps de aprovação pendentes assignados ao usuário corrente,
+ * em qualquer contrato/medição do tenant.
+ */
+export async function listMyPendingApprovals(): Promise<PendingApprovalRow[]> {
+  if (SKIP_AUTH) return MOCK_PENDING_APPROVALS;
+  checkSupabase();
+
+  // Descobrir member do auth.uid() corrente
+  const { data: au } = await supabase.auth.getUser();
+  const authId = au?.user?.id;
+  if (!authId) return [];
+
+  const memberRes = await supabase
+    .from('members').select('id').eq('auth_id', authId).is('deleted_at', null).maybeSingle();
+  const memberId = memberRes.data?.id;
+  if (!memberId) return [];
+
+  const r = await supabase
+    .from('measurement_approval_steps')
+    .select(`
+      id, ordem, nome, role_required, due_at, created_at, status,
+      measurements!inner (
+        id, numero, complementar_numero, status, valor_liquido, deleted_at,
+        contracts!inner ( id, numero, objeto, deleted_at )
+      )
+    `)
+    .eq('status', 'pendente')
+    .eq('assigned_to', memberId)
+    .is('deleted_at', null)
+    .order('due_at', { ascending: true, nullsFirst: false });
+
+  fail(r.error);
+  type Row = {
+    id: string; ordem: number; nome: string; role_required: string;
+    due_at: string | null; created_at: string;
+    measurements: {
+      id: string; numero: number; complementar_numero: number; status: string;
+      valor_liquido: number; deleted_at: string | null;
+      contracts: { id: string; numero: string; objeto: string; deleted_at: string | null } | null;
+    } | null;
+  };
+  const now = Date.now();
+  return ((r.data || []) as unknown as Row[])
+    .filter((x) => x.measurements && !x.measurements.deleted_at && x.measurements.contracts && !x.measurements.contracts.deleted_at)
+    .map((x) => {
+      const m = x.measurements!;
+      const c = m.contracts!;
+      const created = new Date(x.created_at).getTime();
+      const dias = Math.max(0, Math.floor((now - created) / 86400_000));
+      let sla: PendingApprovalRow['sla'] = 'sem_sla';
+      if (x.due_at) {
+        const due = new Date(x.due_at).getTime();
+        if (due < now) sla = 'atrasado';
+        else if (due < now + 86400_000) sla = 'urgente';
+        else sla = 'no_prazo';
+      }
+      return {
+        step_id: x.id,
+        measurement_id: m.id,
+        measurement_numero: m.numero,
+        measurement_complementar: m.complementar_numero,
+        measurement_status: m.status,
+        measurement_valor_liquido: Number(m.valor_liquido || 0),
+        contract_id: c.id,
+        contract_numero: c.numero,
+        contract_objeto: c.objeto,
+        step_ordem: x.ordem,
+        step_nome: x.nome,
+        role_required: x.role_required,
+        due_at: x.due_at,
+        created_at: x.created_at,
+        dias_pendente: dias,
+        sla,
+      };
+    });
+}

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, MapPin, Plus, ShieldCheck, WalletCards, LineChart, ClipboardList, Briefcase } from 'lucide-react';
-import { listContracts, getPendencias, getTenantSummary } from '../lib/api';
+import { AlertTriangle, MapPin, Plus, ShieldCheck, WalletCards, LineChart, ClipboardList, Briefcase, PieChart, TrendingUp } from 'lucide-react';
+import { listContracts, getPendencias, getTenantSummary, getPortfolioByProgram } from '../lib/api';
 import { brl, num } from '../lib/format';
 import { CONTRACT_STATUS, statusFor } from '../lib/status';
 import { Layout } from '../components/layout/Layout';
@@ -22,12 +22,17 @@ export function Dashboard() {
   const { data: summary } = useQuery({
     queryKey: ['tenant-summary'], queryFn: getTenantSummary,
   });
+  const { data: portfolio = [] } = useQuery({
+    queryKey: ['portfolio-by-program'], queryFn: getPortfolioByProgram,
+  });
 
   const total = data.reduce((s, c) => s + c.valor_atual, 0);
   const medido = data.reduce((s, c) => s + c.valor_medido_acumulado, 0);
   const saldo = data.reduce((s, c) => s + c.saldo_contratual, 0);
   const totalAlertas = data.reduce((s, c) => s + c.alertas.length, 0);
   const pendHigh = pendencias.filter((p) => p.severidade === 'high').length;
+  const pendMedium = pendencias.filter((p) => p.severidade === 'medium').length;
+  const topPrograms = portfolio.slice(0, 3);
 
   return (
     <Layout>
@@ -164,6 +169,81 @@ export function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Painel V3: Top programas + Distribuição de pendências */}
+      {(topPrograms.length > 0 || pendencias.length > 0) && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <Card className="p-5 lg:col-span-2">
+            <header className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-slate-900 dark:text-slate-100">Top programas</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Maior valor agregado por programa</p>
+              </div>
+              <Link to="/carteira">
+                <Button variant="ghost" size="sm"><PieChart className="h-3.5 w-3.5" />Ver tudo</Button>
+              </Link>
+            </header>
+            {topPrograms.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Sem programas configurados.</p>
+            ) : (
+              <div className="space-y-3">
+                {topPrograms.map((p) => (
+                  <div key={p.program_id ?? 'no-prog'} className="rounded-lg border border-slate-200 p-3 dark:border-border-dark">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium dark:text-slate-100">
+                          {p.program_codigo && <span className="font-mono text-xs text-slate-500">{p.program_codigo} · </span>}
+                          {p.program_nome || 'Sem programa'}
+                        </p>
+                        {p.program_orgao && <p className="text-xs text-slate-500">{p.program_orgao}</p>}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-sm font-semibold tabular dark:text-slate-100">{brl(p.valor_total)}</p>
+                        <p className="text-xs text-slate-500">{p.contratos_count} contrato(s)</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="flex-1">
+                        <Progress value={Number(p.percentual_financeiro_medio) || 0} />
+                      </div>
+                      <span className="font-mono text-xs tabular text-slate-600 dark:text-slate-300">
+                        {Number(p.percentual_financeiro_medio || 0).toFixed(1)}% medido
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-5">
+            <header className="mb-3">
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Pendências</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Distribuição por severidade</p>
+            </header>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 dark:bg-red-900/20">
+                <span className="font-medium text-red-900 dark:text-red-200">Alta</span>
+                <Badge tone="red">{pendHigh}</Badge>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-yellow-50 px-3 py-2 dark:bg-yellow-900/20">
+                <span className="font-medium text-yellow-900 dark:text-yellow-200">Média</span>
+                <Badge tone="yellow">{pendMedium}</Badge>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 dark:bg-muted-dark">
+                <span className="font-medium dark:text-slate-200">Baixa</span>
+                <Badge tone="slate">{Math.max(pendencias.length - pendHigh - pendMedium, 0)}</Badge>
+              </div>
+            </div>
+            <Link to="/pendencias" className="mt-3 block">
+              <Button variant="outline" size="sm" className="w-full">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Ver todas
+              </Button>
+            </Link>
+          </Card>
+        </div>
+      )}
     </Layout>
   );
 }

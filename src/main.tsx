@@ -7,6 +7,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Não usamos @fontsource pois ele entrega WOFF2 (não permitido neste produto).
 import './styles.css';
 import { App } from './App';
+import { initTheme } from './hooks/useTheme';
+
+// Aplica tema persistido ANTES do primeiro render (evita flash claro→escuro)
+initTheme();
 
 const queryClient = new QueryClient({
   defaultOptions: {

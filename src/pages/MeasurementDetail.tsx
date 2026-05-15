@@ -1,22 +1,28 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { Download, FileText, Send, ShieldCheck, AlertCircle, CheckCircle2, ChevronDown, ClipboardCopy, History, FilePlus, RefreshCcw, XCircle } from 'lucide-react';
-import { useState } from 'react';
-import { getMeasurement, listMItems, callFn, copyMeasurementBalance, copyPreviousMeasurement } from '../lib/api';
+import { Download, FileText, Send, ShieldCheck, AlertCircle, CheckCircle2, ChevronDown, ClipboardCopy, History, FilePlus, RefreshCcw, XCircle, Upload, DollarSign } from 'lucide-react';
+import { useState, useEffect, type FormEvent } from 'react';
+import { getMeasurement, listMItems, callFn, copyMeasurementBalance, copyPreviousMeasurement, submitMeasurement, registerPaymentEvent } from '../lib/api';
 import { brl, num, dt } from '../lib/format';
 import { MEASUREMENT_STATUS, statusFor } from '../lib/status';
+import { humanizeError } from '../lib/errors';
+import { useRecentItems } from '../hooks/useRecentItems';
 import { Layout } from '../components/layout/Layout';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+import { Field } from '../components/ui/FormField';
 import { Empty, ErrorState, Skeleton } from '../components/ui/Stat';
 import { GlossesPanel } from '../components/GlossesPanel';
 import { MeasurementLifecycleMenu } from '../components/MeasurementLifecycleMenu';
+import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
 
 export function MeasurementDetail() {
   const { id = '', medId = '' } = useParams();
   const qc = useQueryClient();
+  const { push: pushRecent } = useRecentItems();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -31,6 +37,19 @@ export function MeasurementDetail() {
     queryFn: () => listMItems(medId),
     enabled: !!medId,
   });
+
+  // Marca medição como recente
+  useEffect(() => {
+    if (m?.id && m.numero != null) {
+      pushRecent({
+        id: m.id,
+        type: 'measurement',
+        label: `Medição #${m.numero}${m.complementar_numero ? `.${m.complementar_numero}` : ''}`,
+        hint: `${m.tipo} · ${m.status}`,
+        to: `/contratos/${id}/medicoes/${m.id}`,
+      });
+    }
+  }, [m?.id, m?.numero, m?.complementar_numero, m?.tipo, m?.status, id, pushRecent]);
 
   const validate = useMutation({
     mutationFn: () => callFn('validate-measurement', { measurement_id: medId }),
@@ -67,6 +86,20 @@ export function MeasurementDetail() {
     },
     onError: (e: Error) => { setErr(e.message); setBusy(null); },
   });
+
+  const submit = useMutation({
+    mutationFn: () => submitMeasurement(medId),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['measurement', medId] });
+      qc.invalidateQueries({ queryKey: ['workflow-status', medId] });
+      qc.invalidateQueries({ queryKey: ['workflow-steps', medId] });
+      setSuccess(`Medição emitida — ${res.workflow_steps_created} etapa(s) de aprovação criada(s).`);
+      setBusy(null); setErr(null);
+    },
+    onError: (e: Error) => { setErr(humanizeError(e)); setBusy(null); },
+  });
+
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
   const PDF_VARIANTS: Array<{ key: string; label: string; desc: string }> = [
@@ -114,6 +147,21 @@ export function MeasurementDetail() {
               <ShieldCheck className="h-4 w-4" />
               Validar
             </Button>
+            {['rascunho', 'preliminar', 'devolvida'].includes(m.status) && (
+              <Button variant="secondary" loading={busy === 'submit'}
+                      onClick={() => { setBusy('submit'); submit.mutate(); }}
+                      title="Submete o boletim para o fluxo de aprovação">
+                <Upload className="h-4 w-4" />
+                Emitir
+              </Button>
+            )}
+            {m.status === 'aprovada' && (
+              <Button variant="secondary" onClick={() => setPaymentOpen(true)}
+                      title="Registra evento de pagamento desta medição">
+                <DollarSign className="h-4 w-4" />
+                Registrar pagamento
+              </Button>
+            )}
             <MeasurementLifecycleMenu
               measurement={{
                 id: m.id,
@@ -281,6 +329,13 @@ export function MeasurementDetail() {
       </Card>
 
       <div className="mt-4">
+        <WorkflowProgressPanel
+          measurementId={medId}
+          readOnly={['rascunho', 'preliminar', 'cancelada', 'retificada'].includes(m.status)}
+        />
+      </div>
+
+      <div className="mt-4">
         <GlossesPanel
           measurementId={medId}
           items={items.map((it) => ({
@@ -307,6 +362,102 @@ export function MeasurementDetail() {
           )}
         </Card>
       )}
+
+      {paymentOpen && (
+        <PaymentModal
+          measurementId={medId}
+          valorSugerido={Number(m.valor_liquido || 0)}
+          onClose={() => setPaymentOpen(false)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ['measurement', medId] });
+            setSuccess('Pagamento registrado com sucesso.');
+            setPaymentOpen(false);
+          }}
+        />
+      )}
     </Layout>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Modal: registrar pagamento
+// -----------------------------------------------------------------------------
+function PaymentModal({ measurementId, valorSugerido, onClose, onSaved }: {
+  measurementId: string;
+  valorSugerido: number;
+  onClose: () => void;
+  onSaved?: () => void;
+}) {
+  const [valorPago, setValorPago] = useState<string>(String(valorSugerido || ''));
+  const [dataPagamento, setDataPagamento] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [numeroOB, setNumeroOB] = useState<string>('');
+  const [notaFiscal, setNotaFiscal] = useState<string>('');
+  const [observacao, setObservacao] = useState<string>('');
+  const [err, setErr] = useState<string | null>(null);
+
+  const register = useMutation({
+    mutationFn: () => registerPaymentEvent({
+      measurement_id: measurementId,
+      valor_pago: Number(valorPago),
+      data_pagamento: dataPagamento,
+      numero_ordem_bancaria: numeroOB.trim() || null,
+      nota_fiscal: notaFiscal.trim() || null,
+      observacao: observacao.trim() || null,
+    }),
+    onSuccess: () => onSaved?.(),
+    onError: (e: Error) => setErr(humanizeError(e)),
+  });
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    const v = Number(valorPago);
+    if (!v || v <= 0) { setErr('Informe um valor pago maior que zero'); return; }
+    if (!dataPagamento) { setErr('Informe a data de pagamento'); return; }
+    register.mutate();
+  }
+
+  return (
+    <Modal open onClose={onClose}
+      title="Registrar pagamento"
+      subtitle="Lança um evento de pagamento. Quando o total atingir o valor líquido, a medição é marcada como paga."
+      size="md"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSubmit} loading={register.isPending}>
+            <DollarSign className="h-4 w-4" />Registrar
+          </Button>
+        </div>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Valor pago (R$)" required>
+            <input type="number" step="0.01" min="0.01" value={valorPago}
+                   onChange={(e) => setValorPago(e.target.value)} className="input" />
+          </Field>
+          <Field label="Data do pagamento" required>
+            <input type="date" value={dataPagamento}
+                   onChange={(e) => setDataPagamento(e.target.value)} className="input" />
+          </Field>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Nº ordem bancária">
+            <input type="text" value={numeroOB} onChange={(e) => setNumeroOB(e.target.value)}
+                   className="input" placeholder="Ex: OB-2025/0317" />
+          </Field>
+          <Field label="Nota fiscal">
+            <input type="text" value={notaFiscal} onChange={(e) => setNotaFiscal(e.target.value)}
+                   className="input" placeholder="Ex: NF-e 12.345" />
+          </Field>
+        </div>
+        <Field label="Observação" hint="Opcional. Pode anotar glosa final, retenção contábil, etc.">
+          <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3}
+                    className="input min-h-[70px] resize-y" />
+        </Field>
+        {err && <p className="rounded-lg border border-error/30 bg-error/5 px-3 py-2 text-sm text-error">{err}</p>}
+      </form>
+    </Modal>
   );
 }

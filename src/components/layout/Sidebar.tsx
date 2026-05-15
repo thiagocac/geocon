@@ -1,7 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
 import {
   Home, Layers, FolderTree, Bell, Users, LogOut, ShieldCheck, ChevronDown,
-  Briefcase, BookOpen, ClipboardList, PieChart,
+  Briefcase, BookOpen, ClipboardList, PieChart, BarChart3, History,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -15,11 +15,13 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { to: '/dashboard',     label: 'Carteira',     icon: Home },
-  { to: '/contratos',     label: 'Contratos',    icon: Layers },
+  { to: '/dashboard',     label: 'Carteira',           icon: Home },
+  { to: '/contratos',     label: 'Contratos',          icon: Layers },
   { to: '/carteira',      label: 'Visão por programa', icon: PieChart },
-  { to: '/pendencias',    label: 'Pendências',   icon: ClipboardList },
-  { to: '/ged',           label: 'GED/DataBook', icon: FolderTree },
+  { to: '/aprovacoes',    label: 'Minhas aprovações',  icon: ShieldCheck },
+  { to: '/pendencias',    label: 'Pendências',         icon: ClipboardList },
+  { to: '/relatorios',    label: 'Relatórios',         icon: BarChart3 },
+  { to: '/ged',           label: 'GED/DataBook',       icon: FolderTree },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -28,6 +30,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/programs',             label: 'Programas',    icon: PieChart,    roles: ['admin', 'gestor_contrato'] },
   { to: '/admin/disciplines',          label: 'Disciplinas',  icon: Layers,      roles: ['admin', 'gestor_contrato'] },
   { to: '/admin/contratos/workflows',  label: 'Workflows',    icon: ShieldCheck, roles: ['admin'] },
+  { to: '/admin/auditoria',            label: 'Auditoria',    icon: History,     roles: ['admin'] },
   { to: '/admin/backlog',              label: 'Backlog',      icon: BookOpen,    roles: ['admin'] },
 ];
 

@@ -25,16 +25,19 @@ import { MeasurementMemoryPage } from './pages/MeasurementMemoryPage';
 // Contract submodules (placeholders + AdditiveDetail)
 import {
   AdditiveDetail,
-  Tracking, Reports,
+  Tracking, Reports as ContractReports,
 } from './pages/contracts';
 import { Financial } from './pages/Financial';
 import { Schedule } from './pages/Schedule';
 import { Portfolio } from './pages/Portfolio';
 import { Pendencias } from './pages/Pendencias';
+import { MyApprovals } from './pages/MyApprovals';
+import { Reports } from './pages/Reports';
 import { Eap } from './pages/Eap';
 import { SovVersionCompare } from './pages/SovVersionCompare';
 import { AdminPrograms } from './pages/admin/Programs';
 import { AdminDisciplines } from './pages/admin/Disciplines';
+import { AdminAuditLog } from './pages/admin/AuditLog';
 import { Additives } from './pages/Additives';
 import { UnforeseenList, UnforeseenDetail } from './pages/UnforeseenItems';
 import { MeasurementApprovePage } from './pages/MeasurementApprovePage';
@@ -69,6 +72,8 @@ export function App() {
         <Route path="/dashboard"          element={<P><Dashboard /></P>} />
         <Route path="/carteira"           element={<P><Portfolio /></P>} />
         <Route path="/pendencias"         element={<P><Pendencias /></P>} />
+        <Route path="/aprovacoes"         element={<P><MyApprovals /></P>} />
+        <Route path="/relatorios"         element={<P><Reports /></P>} />
         <Route path="/me"                 element={<P><Me /></P>} />
         <Route path="/notifications"      element={<P><Notifications /></P>} />
 
@@ -94,7 +99,7 @@ export function App() {
         <Route path="/contratos/:id/cronograma"               element={<P><Schedule /></P>} />
         <Route path="/contratos/:id/eap"                      element={<P><Eap /></P>} />
         <Route path="/contratos/:id/planilha/versoes"         element={<P><SovVersionCompare /></P>} />
-        <Route path="/contratos/:id/relatorios"               element={<P><Reports /></P>} />
+        <Route path="/contratos/:id/relatorios"               element={<P><ContractReports /></P>} />
 
         {/* GED */}
         <Route path="/ged"                       element={<P><Ged /></P>} />
@@ -113,6 +118,7 @@ export function App() {
         <Route path="/admin/contratos/workflows" element={<P roles={['admin']}><WorkflowsAdmin /></P>} />
         <Route path="/admin/programs"            element={<P roles={['admin', 'gestor_contrato']}><AdminPrograms /></P>} />
         <Route path="/admin/disciplines"         element={<P roles={['admin', 'gestor_contrato']}><AdminDisciplines /></P>} />
+        <Route path="/admin/auditoria"           element={<P roles={['admin']}><AdminAuditLog /></P>} />
         <Route path="/admin/backlog"             element={<P roles={['admin']}><Backlog /></P>} />
 
         {/* 404 fallback */}
