@@ -127,6 +127,14 @@ geocon-final/
 
 ---
 
+## V77 — release notes resumo
+
+Detalhes em `docs/release-v77.md`.
+
+**Fix Realtime: cannot add postgres_changes callbacks after subscribe()** — `useRealtimeAlerts` é consumido por dois componentes do layout (toasts + dropdown). Cada chamada criava um `supabase.channel()` com nome determinístico por tenantId; o segundo consumidor batia em um channel já-subscrito e o cliente Realtime jogava exceção, capturada pelo `BootErrorBoundary` V76. V77 substitui a função por um singleton que mantém um channel por tenant e multiplexa callbacks localmente — N consumidores compartilham 1 WebSocket.
+
+---
+
 ## V76 — release notes resumo
 
 Detalhes em `docs/release-v76.md`.

@@ -8916,25 +8916,84 @@ export function subscribeToRealtimeAlerts(
 
   if (!hasSupabase || !tenantId) return () => {};
 
-  const channel = supabase
-    .channel(`realtime_alerts:tenant=${tenantId}`)
-    .on(
-      'postgres_changes' as 'system',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'realtime_alerts',
-        filter: `tenant_id=eq.${tenantId}`,
-      },
-      (payload) => {
-        const alert = (payload as { new: RealtimeAlert }).new;
-        if (alert) onAlert(alert);
-      },
-    )
-    .subscribe();
+  // V77 — Multiplexação por tenant.
+  //
+  // Antes: cada chamada deste hook criava um channel com nome determinístico
+  // (`realtime_alerts:tenant=${tenantId}`). Como `useRealtimeAlerts` é
+  // consumido por dois componentes no layout simultaneamente
+  // (RealtimeAlertToasts + NotificationDropdown), o Supabase JS client
+  // reutilizava o channel entre as duas chamadas — a primeira fazia
+  // `.on().subscribe()` com sucesso, e a segunda tentava `.on(...)` em um
+  // channel já-subscrito, jogando:
+  //   "cannot add `postgres_changes` callbacks for ... after subscribe()"
+  //
+  // Agora: mantemos um channel POR TENANT e multiplexamos callbacks
+  // localmente. Cleanup remove apenas o callback do conjunto; o channel
+  // só é fechado quando o último subscriber sai.
+  return registerRealtimeAlertSubscriber(tenantId, onAlert);
+}
+
+/**
+ * V77 — Gestor singleton de canais Realtime para `realtime_alerts`.
+ *
+ * Mantém no máximo um channel Supabase por tenantId. Múltiplos chamadores
+ * (componentes/hooks) compartilham o mesmo channel; cada um recebe seu
+ * callback chamado quando uma linha nova chega.
+ */
+interface RealtimeAlertChannel {
+  // Tipo do channel é interno do supabase-js; usamos unknown para evitar
+  // dependência tipada e mantemos type-safety nos pontos de uso.
+  channel: { unsubscribe: () => Promise<unknown> };
+  subscribers: Set<(alert: RealtimeAlert) => void>;
+}
+
+const realtimeAlertChannels = new Map<string, RealtimeAlertChannel>();
+
+function registerRealtimeAlertSubscriber(
+  tenantId: string,
+  onAlert: (alert: RealtimeAlert) => void,
+): () => void {
+  let entry = realtimeAlertChannels.get(tenantId);
+
+  if (!entry) {
+    const subscribers = new Set<(alert: RealtimeAlert) => void>();
+    const channel = supabase
+      .channel(`realtime_alerts:tenant=${tenantId}`)
+      .on(
+        'postgres_changes' as 'system',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'realtime_alerts',
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        (payload) => {
+          const alert = (payload as { new: RealtimeAlert }).new;
+          if (!alert) return;
+          // Notifica todos os subscribers locais. Snapshot do Set para
+          // que cancelamentos durante o broadcast não causem mutação
+          // concorrente.
+          for (const cb of Array.from(subscribers)) {
+            try { cb(alert); } catch { /* isola erro de um subscriber */ }
+          }
+        },
+      )
+      .subscribe();
+
+    entry = { channel, subscribers };
+    realtimeAlertChannels.set(tenantId, entry);
+  }
+
+  entry.subscribers.add(onAlert);
+  const currentEntry = entry;
 
   return () => {
-    supabase.removeChannel(channel);
+    currentEntry.subscribers.delete(onAlert);
+    // Último subscriber saiu → fecha o channel e libera o recurso.
+    if (currentEntry.subscribers.size === 0) {
+      supabase.removeChannel(currentEntry.channel as Parameters<typeof supabase.removeChannel>[0]);
+      realtimeAlertChannels.delete(tenantId);
+    }
   };
 }
 
