@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, Layers, Home, ClipboardList, FolderTree, BarChart3, PieChart,
   Briefcase, Users, ShieldCheck, BookOpen, History, Plus, FileText,
-  CornerDownLeft, ArrowDown, ArrowUp, Clock, FileCheck2,
+  CornerDownLeft, ArrowDown, ArrowUp, Clock, FileCheck2, Activity, ShieldOff, KeyRound,
 } from 'lucide-react';
 import { listContracts } from '../../lib/api';
 import { useAuth } from '../../hooks/useAuth';
@@ -79,6 +79,8 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: 'nav-carteira',   label: 'Visão por programa',       hint: 'Carteira agregada', group: 'Navegação', icon: PieChart,    to: '/carteira' },
       { id: 'nav-aprovacoes', label: 'Minhas aprovações',        hint: 'Steps assignados a mim', group: 'Navegação', icon: ShieldCheck, to: '/aprovacoes' },
       { id: 'nav-pendencias', label: 'Pendências',               hint: 'Itens com SLA estourado', group: 'Navegação', icon: ClipboardList, to: '/pendencias' },
+      { id: 'nav-timeline',   label: 'Linha do tempo',            hint: 'Eventos cronológicos da carteira', group: 'Navegação', icon: Activity, to: '/timeline' },
+      { id: 'nav-fornecedores-sancionados', label: 'Fornecedores sancionados',     hint: 'Cadastro cross-contract por CNPJ', group: 'Navegação', icon: ShieldOff, to: '/fornecedores-sancionados' },
       { id: 'nav-relatorios', label: 'Relatórios globais',       hint: 'CSV e visualizações', group: 'Navegação', icon: BarChart3,   to: '/relatorios' },
       { id: 'nav-ged',        label: 'GED / DataBook',           hint: 'Documentos', group: 'Navegação', icon: FolderTree,   to: '/ged' },
       { id: 'nav-grds',       label: 'Distribuição (GRDs)',      hint: 'Guia de remessa', group: 'Navegação', icon: FolderTree,  to: '/ged/distribuicao' },
@@ -96,6 +98,7 @@ export function CommandPalette({ open, onClose }: Props) {
       { id: 'adm-audit',     label: 'Auditoria',    hint: '', group: 'Administração', icon: History,      to: '/admin/auditoria',            roleGuard: ['admin'] },
       { id: 'adm-digests',   label: 'Digests',      hint: 'Histórico do digest diário', group: 'Administração', icon: History, to: '/admin/digests', roleGuard: ['admin'] },
       { id: 'adm-broadcast', label: 'Broadcasts',   hint: 'Notificação em massa',       group: 'Administração', icon: History, to: '/admin/broadcast', roleGuard: ['admin'] },
+      { id: 'adm-api-keys',  label: 'Chaves de API',hint: 'Tokens para integração externa', group: 'Administração', icon: KeyRound, to: '/admin/api-keys', roleGuard: ['admin'] },
       { id: 'adm-backlog',   label: 'Backlog',      hint: '', group: 'Administração', icon: BookOpen,     to: '/admin/backlog',              roleGuard: ['admin'] },
     ];
 

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { DemoBanner } from './DemoBanner';
+import { RealtimeAlertToasts } from './RealtimeAlertToasts';
 import { SKIP_AUTH } from '../../lib/supabase';
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -24,6 +25,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <main id="main" className="pt-16 lg:pl-64">
         <div className="mx-auto max-w-[1400px] p-4 lg:p-8">{children}</div>
       </main>
+      <RealtimeAlertToasts />
     </div>
   );
 }

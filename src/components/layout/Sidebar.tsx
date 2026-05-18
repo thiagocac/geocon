@@ -2,6 +2,7 @@ import { NavLink, Link } from 'react-router-dom';
 import {
   Home, Layers, FolderTree, Bell, Users, LogOut, ShieldCheck, ChevronDown,
   Briefcase, BookOpen, ClipboardList, PieChart, BarChart3, History, Mail, Megaphone,
+  Tag, Webhook, Activity, Inbox, TrendingUp, ShieldOff, KeyRound,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -20,6 +21,8 @@ const PRIMARY_NAV: NavItem[] = [
   { to: '/carteira',      label: 'Visão por programa', icon: PieChart },
   { to: '/aprovacoes',    label: 'Minhas aprovações',  icon: ShieldCheck },
   { to: '/pendencias',    label: 'Pendências',         icon: ClipboardList },
+  { to: '/timeline',      label: 'Linha do tempo',     icon: Activity },
+  { to: '/fornecedores-sancionados', label: 'Fornecedores sancionados', icon: ShieldOff },
   { to: '/relatorios',    label: 'Relatórios',         icon: BarChart3 },
   { to: '/ged',           label: 'GED/DataBook',       icon: FolderTree },
 ];
@@ -33,8 +36,49 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/auditoria',            label: 'Auditoria',    icon: History,     roles: ['admin'] },
   { to: '/admin/digests',              label: 'Digests',      icon: Mail,        roles: ['admin'] },
   { to: '/admin/broadcast',            label: 'Broadcasts',   icon: Megaphone,   roles: ['admin'] },
+  { to: '/admin/alias-papeis',         label: 'Aliases',      icon: Tag,         roles: ['admin'] },
+  { to: '/admin/webhooks',             label: 'Webhooks',     icon: Webhook,     roles: ['admin'] },
+  { to: '/admin/webhooks-fila',        label: 'Fila eventos', icon: Inbox,       roles: ['admin'] },
+  { to: '/admin/api-keys',             label: 'Chaves de API',icon: KeyRound,    roles: ['admin'] },
+  { to: '/admin/indices-economicos',   label: 'Índices econômicos', icon: TrendingUp, roles: ['admin'] },
+  { to: '/admin/reajustes-em-massa',   label: 'Reajustes (lote)', icon: Layers,    roles: ['admin', 'gestor_contrato'] },
+  { to: '/admin/risco-batch',          label: 'Risco · batch', icon: Activity,   roles: ['admin'] },
   { to: '/admin/backlog',              label: 'Backlog',      icon: BookOpen,    roles: ['admin'] },
 ];
+
+/**
+ * V26: subgrupos do menu admin. Cada item pertence a UM subgrupo.
+ * Ordem do subgrupo define ordem de renderização.
+ */
+type AdminSubgroup = 'pessoas' | 'comunicacao' | 'integracoes' | 'operacao';
+
+const ADMIN_SUBGROUP_OF: Record<string, AdminSubgroup> = {
+  '/admin/users':              'pessoas',
+  '/admin/tenants':            'pessoas',
+  '/admin/programs':           'pessoas',
+  '/admin/disciplines':        'pessoas',
+  '/admin/digests':            'comunicacao',
+  '/admin/broadcast':          'comunicacao',
+  '/admin/alias-papeis':       'comunicacao',
+  '/admin/webhooks':           'integracoes',
+  '/admin/webhooks-fila':      'integracoes',
+  '/admin/api-keys':           'integracoes',
+  '/admin/contratos/workflows':'operacao',
+  '/admin/risco-batch':        'operacao',
+  '/admin/indices-economicos': 'operacao',
+  '/admin/reajustes-em-massa': 'operacao',
+  '/admin/auditoria':          'operacao',
+  '/admin/backlog':            'operacao',
+};
+
+const ADMIN_SUBGROUP_LABELS: Record<AdminSubgroup, string> = {
+  pessoas:     'Pessoas & cadastro',
+  comunicacao: 'Comunicação',
+  integracoes: 'Integrações',
+  operacao:    'Operação interna',
+};
+
+const ADMIN_SUBGROUP_ORDER: AdminSubgroup[] = ['pessoas', 'comunicacao', 'integracoes', 'operacao'];
 
 interface Props {
   open: boolean;
@@ -130,23 +174,40 @@ export function Sidebar({ open, onClose }: Props) {
                 <ChevronDown className={`h-3 w-3 transition-transform ${adminOpen ? '' : '-rotate-90'}`} />
               </button>
               {adminOpen && (
-                <div className="space-y-1">
-                  {ADMIN_NAV.filter((item) => !item.roles || hasRole(item.roles)).map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        [
-                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                          isActive ? 'bg-white/15 text-white' : 'text-slate-200 hover:bg-white/10',
-                        ].join(' ')
-                      }
-                    >
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      {item.label}
-                    </NavLink>
-                  ))}
+                <div className="space-y-3">
+                  {ADMIN_SUBGROUP_ORDER.map((sub) => {
+                    const items = ADMIN_NAV.filter(
+                      (item) =>
+                        (ADMIN_SUBGROUP_OF[item.to] === sub) &&
+                        (!item.roles || hasRole(item.roles)),
+                    );
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={sub}>
+                        <p className="px-3 pb-1 pt-1 font-mono text-[9px] font-semibold uppercase tracking-display text-white/40">
+                          {ADMIN_SUBGROUP_LABELS[sub]}
+                        </p>
+                        <div className="space-y-0.5">
+                          {items.map((item) => (
+                            <NavLink
+                              key={item.to}
+                              to={item.to}
+                              onClick={onClose}
+                              className={({ isActive }) =>
+                                [
+                                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                                  isActive ? 'bg-white/15 text-white' : 'text-slate-200 hover:bg-white/10',
+                                ].join(' ')
+                              }
+                            >
+                              <item.icon className="h-4 w-4 flex-shrink-0" />
+                              {item.label}
+                            </NavLink>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -25,12 +25,12 @@ export function PageHeader({ title, subtitle, kicker, actions, backTo, backLabel
         </Link>
       )}
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-        <div>
+        <div className="min-w-0 flex-1">
           {kicker && <Kicker className="mb-1.5">{kicker}</Kicker>}
           <h1 className="page-title">{title}</h1>
           {subtitle && <p className="page-subtitle">{subtitle}</p>}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 md:shrink-0">{actions}</div>}
       </div>
     </div>
   );
