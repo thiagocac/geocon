@@ -46,15 +46,28 @@ function buildHtml(b: Broadcast, recipientName: string): string {
   const firstName = recipientName.split(' ')[0];
   const tone = b.kind === 'system' ? '#dc2626' : (b.kind === 'warning' ? '#f59e0b' : '#7e22ce');
   const toneLabel = b.kind === 'system' ? 'URGENTE' : (b.kind === 'warning' ? 'ATENÇÃO' : 'COMUNICADO');
-  const actionBtn = b.action_url ? `
+
+  // Interpola variáveis per-user (globais já foram resolvidas no RPC)
+  const interpolate = (t: string): string => {
+    if (!t || !t.includes('{{')) return t;
+    return t
+      .replace(/\{\{user_name\}\}/g, recipientName)
+      .replace(/\{\{user_first\}\}/g, firstName)
+      .replace(/\{\{user_email\}\}/g, ''); // omitido para não poluir HTML
+  };
+
+  const renderedTitle = interpolate(b.title);
+  const renderedBody  = interpolate(b.body);
+  const renderedUrl   = interpolate(b.action_url || '');
+
+  const actionBtn = renderedUrl ? `
     <tr><td style="padding:16px 24px 4px">
-      <a href="${b.action_url.startsWith('http') ? b.action_url : SITE_URL + b.action_url}"
+      <a href="${renderedUrl.startsWith('http') ? renderedUrl : SITE_URL + renderedUrl}"
          style="display:inline-block;background:#182863;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600">
         Abrir →
       </a>
     </td></tr>` : '';
 
-  // Escape para HTML
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   return `<!doctype html>
@@ -68,8 +81,8 @@ function buildHtml(b: Broadcast, recipientName: string): string {
     <p style="margin:0;color:#0f172a;font-size:14px">Olá, <strong>${esc(firstName)}</strong> —</p>
   </td></tr>
   <tr><td style="padding:0 24px 12px">
-    <h2 style="margin:0 0 8px;color:#0f172a;font-size:18px;font-weight:800">${esc(b.title)}</h2>
-    <p style="margin:0;color:#475569;font-size:14px;line-height:1.5;white-space:pre-wrap">${esc(b.body)}</p>
+    <h2 style="margin:0 0 8px;color:#0f172a;font-size:18px;font-weight:800">${esc(renderedTitle)}</h2>
+    <p style="margin:0;color:#475569;font-size:14px;line-height:1.5;white-space:pre-wrap">${esc(renderedBody)}</p>
   </td></tr>
   ${actionBtn}
   <tr><td style="padding:16px 24px;background:#f8fafc;font-size:11px;color:#94a3b8">
