@@ -1,0 +1,29 @@
+{
+  "name": "Consulte GEO — Gestão de Contratos",
+  "short_name": "GeoCon",
+  "description": "Plataforma de administração contratual, medição e auditoria. Família Consulte GEO.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#182863",
+  "background_color": "#ffffff",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/logos/logo-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Apontamento de campo",
+      "short_name": "Campo",
+      "description": "Ir direto para a medição em obra",
+      "url": "/medicoes"
+    }
+  ]
+}
