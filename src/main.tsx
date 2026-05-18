@@ -33,3 +33,18 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// V62 — Service Worker para PWA + cache de assets
+// Não registra em dev (gera HMR conflicts). Registra após load para não
+// competir com primeira renderização.
+if (
+  'serviceWorker' in navigator &&
+  typeof window !== 'undefined' &&
+  !import.meta.env.DEV
+) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('[geocon] SW registration failed', err);
+    });
+  });
+}

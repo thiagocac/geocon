@@ -3,12 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   Building2, MapPin, Briefcase, TrendingUp, FileText, AlertCircle,
+  FileCheck, Gavel, Shield, Hammer, ShieldAlert, Filter,
 } from 'lucide-react';
 import {
   getPortfolioByProgram, getPortfolioByOrgao, getPortfolioByMunicipio,
   getAdditivesConsolidated, getTenantSummary,
+  getPortfolioByProgramLei14133, getPortfolioByOrgaoLei14133, getPortfolioByMunicipioLei14133,
+  getTenantLei14133Kpis,
   type PortfolioByProgram, type PortfolioByOrgao, type PortfolioByMunicipio,
   type AdditiveConsolidated,
+  type PortfolioByProgramLei14133, type PortfolioByOrgaoLei14133, type PortfolioByMunicipioLei14133,
+  type PortfolioLei14133Base,
 } from '../lib/api';
 import { brl } from '../lib/format';
 import { Layout } from '../components/layout/Layout';
@@ -21,12 +26,36 @@ type ViewMode = 'programa' | 'orgao' | 'municipio';
 
 export function Portfolio() {
   const [view, setView] = useState<ViewMode>('programa');
+  const [onlyCritical, setOnlyCritical] = useState(false);
 
   const { data: summary } = useQuery({ queryKey: ['tenant-summary'], queryFn: getTenantSummary });
   const { data: byProgram = [], isLoading: lp } = useQuery({ queryKey: ['portfolio-program'], queryFn: getPortfolioByProgram });
   const { data: byOrgao = [], isLoading: lo } = useQuery({ queryKey: ['portfolio-orgao'], queryFn: getPortfolioByOrgao });
   const { data: byMuni = [], isLoading: lm } = useQuery({ queryKey: ['portfolio-municipio'], queryFn: getPortfolioByMunicipio });
   const { data: additives = [], isLoading: la } = useQuery({ queryKey: ['additives-cons'], queryFn: getAdditivesConsolidated });
+
+  // V43: KPIs Lei 14.133
+  const { data: kpisLei } = useQuery({ queryKey: ['tenant-lei14133-kpis'], queryFn: getTenantLei14133Kpis });
+  const { data: leiByProgram = [] }   = useQuery({ queryKey: ['portfolio-program-lei'],   queryFn: getPortfolioByProgramLei14133 });
+  const { data: leiByOrgao = [] }     = useQuery({ queryKey: ['portfolio-orgao-lei'],     queryFn: getPortfolioByOrgaoLei14133 });
+  const { data: leiByMunicipio = [] } = useQuery({ queryKey: ['portfolio-municipio-lei'], queryFn: getPortfolioByMunicipioLei14133 });
+
+  // Indexes para lookup rápido por chave do agrupamento
+  const leiByProgramMap = useMemo(() => {
+    const m = new Map<string, PortfolioByProgramLei14133>();
+    for (const row of leiByProgram) m.set(row.program_id || '__no_program__', row);
+    return m;
+  }, [leiByProgram]);
+  const leiByOrgaoMap = useMemo(() => {
+    const m = new Map<string, PortfolioByOrgaoLei14133>();
+    for (const row of leiByOrgao) m.set(row.orgao, row);
+    return m;
+  }, [leiByOrgao]);
+  const leiByMunicipioMap = useMemo(() => {
+    const m = new Map<string, PortfolioByMunicipioLei14133>();
+    for (const row of leiByMunicipio) m.set(`${row.uf}|${row.municipio}`, row);
+    return m;
+  }, [leiByMunicipio]);
 
   const isLoading = lp || lo || lm || la;
   const maxValue = useMemo(() => {
@@ -51,12 +80,36 @@ export function Portfolio() {
       />
 
       {summary && (
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
           <Stat label="Contratos ativos" value={String(summary.contratos_ativos)} sub={`de ${summary.contratos_total} no total`} tone="navy" />
           <Stat label="Carteira total" value={brl(summary.valor_carteira_total)} tone="magenta" />
           <Stat label="Medido acumulado" value={brl(summary.valor_medido_total)} sub={summary.valor_carteira_total > 0 ? `${((summary.valor_medido_total / summary.valor_carteira_total) * 100).toFixed(1)}% da carteira` : '—'} tone="success" />
           <Stat label="Pago" value={brl(summary.valor_pago_total)} sub={summary.valor_glosado_total > 0 ? `Glosas ${brl(summary.valor_glosado_total)}` : 'Sem glosas'} tone="navy" />
         </div>
+      )}
+
+      {/* V43: KPIs Lei 14.133 — só renderiza se houver algum problema */}
+      {kpisLei && (kpisLei.vicios_abertos + kpisLei.pars_em_curso + kpisLei.garantias_vencendo_30d + kpisLei.multas_pendentes_count + kpisLei.sancoes_graves_ativas) > 0 && (
+        <Card className="mb-4 p-3 sm:p-4 border-yellow-300/40 bg-yellow-50/50 dark:border-yellow-900/40 dark:bg-yellow-900/10">
+          <div className="mb-2 flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-yellow-700 dark:text-yellow-300" />
+            <p className="text-xs font-mono font-bold uppercase tracking-display text-yellow-900 dark:text-yellow-200">
+              Lei 14.133 · pendências distribuídas na carteira
+            </p>
+            <span className="ml-auto text-[10px] font-mono text-yellow-700 dark:text-yellow-400">
+              {kpisLei.contratos_criticos}/{kpisLei.contratos_total} contratos críticos
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <Lei14133KpiCell icon={FileCheck}    label="Vícios abertos"      value={kpisLei.vicios_abertos} tone="error" />
+            <Lei14133KpiCell icon={Gavel}        label="PARs em curso"        value={kpisLei.pars_em_curso} tone="purple" />
+            <Lei14133KpiCell icon={Shield}       label="Garantias ≤30d"       value={kpisLei.garantias_vencendo_30d} tone="warning" />
+            <Lei14133KpiCell icon={Hammer}       label="Multas pendentes"     value={kpisLei.multas_pendentes_count}
+                             sub={kpisLei.multas_pendentes_valor > 0 ? brl(kpisLei.multas_pendentes_valor) : undefined}
+                             tone="warning" />
+            <Lei14133KpiCell icon={AlertCircle}  label="Impedimento/inido."   value={kpisLei.sancoes_graves_ativas} tone="error" />
+          </div>
+        </Card>
       )}
 
       {/* Tabs */}
@@ -66,19 +119,34 @@ export function Portfolio() {
           <ViewTab active={view === 'programa'} onClick={() => setView('programa')} icon={<Briefcase className="h-3.5 w-3.5" />}>Programa</ViewTab>
           <ViewTab active={view === 'orgao'} onClick={() => setView('orgao')} icon={<Building2 className="h-3.5 w-3.5" />}>Órgão</ViewTab>
           <ViewTab active={view === 'municipio'} onClick={() => setView('municipio')} icon={<MapPin className="h-3.5 w-3.5" />}>Município</ViewTab>
+          {kpisLei && kpisLei.contratos_criticos > 0 && (
+            <button
+              type="button"
+              onClick={() => setOnlyCritical(!onlyCritical)}
+              className={`ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
+                onlyCritical
+                  ? 'bg-error/15 text-error border border-error/40'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-muted-dark dark:text-slate-200'
+              }`}
+              title="Filtrar apenas agrupamentos com contratos críticos Lei 14.133"
+            >
+              <Filter className="h-3 w-3" />
+              {onlyCritical ? 'Mostrando críticos' : 'Apenas críticos'}
+            </button>
+          )}
         </div>
       </Card>
 
       {isLoading && <Card className="p-6"><Skeleton className="h-64" /></Card>}
 
       {!isLoading && view === 'programa' && (
-        <ProgramaTable rows={byProgram} maxValue={maxValue} />
+        <ProgramaTable rows={byProgram} maxValue={maxValue} leiMap={leiByProgramMap} onlyCritical={onlyCritical} />
       )}
       {!isLoading && view === 'orgao' && (
-        <OrgaoTable rows={byOrgao} maxValue={maxValue} />
+        <OrgaoTable rows={byOrgao} maxValue={maxValue} leiMap={leiByOrgaoMap} onlyCritical={onlyCritical} />
       )}
       {!isLoading && view === 'municipio' && (
-        <MunicipioTable rows={byMuni} maxValue={maxValue} />
+        <MunicipioTable rows={byMuni} maxValue={maxValue} leiMap={leiByMunicipioMap} onlyCritical={onlyCritical} />
       )}
 
       {/* Painel de aditivos */}
@@ -101,6 +169,7 @@ export function Portfolio() {
           <p className="px-5 py-8 text-center text-sm text-slate-500">Sem aditivos cadastrados.</p>
         )}
         {additives.length > 0 && (
+          <div className="overflow-x-auto scrollbar-thin">
           <table className="table">
             <thead><tr>
               <th>Contrato</th><th>Aditivo</th><th>Tipo</th><th>Status</th>
@@ -114,6 +183,7 @@ export function Portfolio() {
               {additives.map((a) => <AditivoRow key={a.additive_id} a={a} />)}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </Layout>
@@ -158,65 +228,98 @@ function BarRow({ label, sublabel, value, maxValue, suffix }: { label: string; s
   );
 }
 
-function ProgramaTable({ rows, maxValue }: { rows: PortfolioByProgram[]; maxValue: number }) {
-  if (rows.length === 0) return <Empty title="Sem programas" body="Cadastre programas e vincule contratos a eles para ver a carteira agregada." />;
+function ProgramaTable({ rows, maxValue, leiMap, onlyCritical }: { rows: PortfolioByProgram[]; maxValue: number; leiMap: Map<string, PortfolioByProgramLei14133>; onlyCritical: boolean }) {
+  const filteredRows = onlyCritical
+    ? rows.filter((r) => {
+        const lei = leiMap.get(r.program_id || '__no_program__');
+        return lei && lei.contratos_criticos > 0;
+      })
+    : rows;
+  if (filteredRows.length === 0 && onlyCritical) return <Empty title="Nenhum programa crítico" body="Nenhum programa tem contratos com pendências Lei 14.133 no momento." />;
+  if (filteredRows.length === 0) return <Empty title="Sem programas" body="Cadastre programas e vincule contratos a eles para ver a carteira agregada." />;
   return (
     <Card className="p-5">
       <div className="space-y-5">
-        {rows.map((r) => (
-          <div key={r.program_id || 'no-program'} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0 dark:border-border-dark">
-            <BarRow
-              label={r.program_codigo ? `${r.program_codigo} — ${r.program_nome}` : (r.program_nome || 'Sem programa')}
-              sublabel={r.program_orgao || undefined}
-              value={Number(r.valor_total || 0)}
-              maxValue={maxValue}
-              suffix={
-                <span>
-                  {r.contratos_ativos}/{r.contratos_count} contrato(s) ativo(s) ·{' '}
-                  Medido <span className="font-medium">{brl(Number(r.valor_medido_total || 0))}</span> ({Number(r.percentual_financeiro_medio || 0).toFixed(1)}%) ·{' '}
-                  Pago <span className="font-medium">{brl(Number(r.valor_pago_total || 0))}</span>
-                  {r.valor_aditado_total > 0 && <> · Aditivos <span className="font-medium text-purple">{brl(Number(r.valor_aditado_total))}</span></>}
-                </span>
-              }
-            />
-          </div>
-        ))}
+        {filteredRows.map((r) => {
+          const lei = leiMap.get(r.program_id || '__no_program__');
+          return (
+            <div key={r.program_id || 'no-program'} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0 dark:border-border-dark">
+              <BarRow
+                label={r.program_codigo ? `${r.program_codigo} — ${r.program_nome}` : (r.program_nome || 'Sem programa')}
+                sublabel={r.program_orgao || undefined}
+                value={Number(r.valor_total || 0)}
+                maxValue={maxValue}
+                suffix={
+                  <>
+                    <span>
+                      {r.contratos_ativos}/{r.contratos_count} contrato(s) ativo(s) ·{' '}
+                      Medido <span className="font-medium">{brl(Number(r.valor_medido_total || 0))}</span> ({Number(r.percentual_financeiro_medio || 0).toFixed(1)}%) ·{' '}
+                      Pago <span className="font-medium">{brl(Number(r.valor_pago_total || 0))}</span>
+                      {r.valor_aditado_total > 0 && <> · Aditivos <span className="font-medium text-purple">{brl(Number(r.valor_aditado_total))}</span></>}
+                    </span>
+                    {lei && <Lei14133Badges lei={lei} />}
+                  </>
+                }
+              />
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
 }
 
-function OrgaoTable({ rows, maxValue }: { rows: PortfolioByOrgao[]; maxValue: number }) {
-  if (rows.length === 0) return <Empty title="Sem dados" body="Sem contratos cadastrados para gerar a visão por órgão." />;
+function OrgaoTable({ rows, maxValue, leiMap, onlyCritical }: { rows: PortfolioByOrgao[]; maxValue: number; leiMap: Map<string, PortfolioByOrgaoLei14133>; onlyCritical: boolean }) {
+  const filteredRows = onlyCritical
+    ? rows.filter((r) => {
+        const lei = leiMap.get(r.orgao);
+        return lei && lei.contratos_criticos > 0;
+      })
+    : rows;
+  if (filteredRows.length === 0 && onlyCritical) return <Empty title="Nenhum órgão crítico" body="Nenhum órgão tem contratos com pendências Lei 14.133 no momento." />;
+  if (filteredRows.length === 0) return <Empty title="Sem dados" body="Sem contratos cadastrados para gerar a visão por órgão." />;
   return (
     <Card className="p-5">
       <div className="space-y-5">
-        {rows.map((r) => (
-          <div key={r.orgao} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0 dark:border-border-dark">
-            <BarRow
-              label={r.orgao}
-              value={Number(r.valor_total || 0)}
-              maxValue={maxValue}
-              suffix={
-                <span>
-                  {r.contratos_ativos}/{r.contratos_count} contrato(s) ativo(s) ·{' '}
-                  Medido <span className="font-medium">{brl(Number(r.valor_medido_total || 0))}</span> ({Number(r.percentual_financeiro_medio || 0).toFixed(1)}%) ·{' '}
-                  Pago <span className="font-medium">{brl(Number(r.valor_pago_total || 0))}</span>
-                </span>
-              }
-            />
-          </div>
-        ))}
+        {filteredRows.map((r) => {
+          const lei = leiMap.get(r.orgao);
+          return (
+            <div key={r.orgao} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0 dark:border-border-dark">
+              <BarRow
+                label={r.orgao}
+                value={Number(r.valor_total || 0)}
+                maxValue={maxValue}
+                suffix={
+                  <>
+                    <span>
+                      {r.contratos_ativos}/{r.contratos_count} contrato(s) ativo(s) ·{' '}
+                      Medido <span className="font-medium">{brl(Number(r.valor_medido_total || 0))}</span> ({Number(r.percentual_financeiro_medio || 0).toFixed(1)}%) ·{' '}
+                      Pago <span className="font-medium">{brl(Number(r.valor_pago_total || 0))}</span>
+                    </span>
+                    {lei && <Lei14133Badges lei={lei} />}
+                  </>
+                }
+              />
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
 }
 
-function MunicipioTable({ rows, maxValue }: { rows: PortfolioByMunicipio[]; maxValue: number }) {
-  if (rows.length === 0) return <Empty title="Sem dados de localização" body="Cadastre os lotes/obras dos contratos com município e UF." />;
+function MunicipioTable({ rows, maxValue, leiMap, onlyCritical }: { rows: PortfolioByMunicipio[]; maxValue: number; leiMap: Map<string, PortfolioByMunicipioLei14133>; onlyCritical: boolean }) {
+  const filteredRows = onlyCritical
+    ? rows.filter((r) => {
+        const lei = leiMap.get(`${r.uf}|${r.municipio}`);
+        return lei && lei.contratos_criticos > 0;
+      })
+    : rows;
+  if (filteredRows.length === 0 && onlyCritical) return <Empty title="Nenhum município crítico" body="Nenhum município tem contratos com pendências Lei 14.133 no momento." />;
+  if (filteredRows.length === 0) return <Empty title="Sem dados de localização" body="Cadastre os lotes/obras dos contratos com município e UF." />;
   // Agrupa por UF
   const byUf = new Map<string, PortfolioByMunicipio[]>();
-  for (const r of rows) {
+  for (const r of filteredRows) {
     const arr = byUf.get(r.uf) || [];
     arr.push(r);
     byUf.set(r.uf, arr);
@@ -233,20 +336,26 @@ function MunicipioTable({ rows, maxValue }: { rows: PortfolioByMunicipio[]; maxV
               <span className="font-mono text-sm tabular text-slate-700 dark:text-slate-200">{brl(ufTotal)}</span>
             </div>
             <div className="space-y-3">
-              {items.map((r) => (
-                <BarRow
-                  key={`${r.uf}-${r.municipio}`}
-                  label={r.municipio}
-                  value={Number(r.valor_total || 0)}
-                  maxValue={maxValue}
-                  suffix={
-                    <span>
-                      {r.contratos_ativos}/{r.contratos_count} contrato(s) ativo(s) ·{' '}
-                      Medido <span className="font-medium">{brl(Number(r.valor_medido_total || 0))}</span>
-                    </span>
-                  }
-                />
-              ))}
+              {items.map((r) => {
+                const lei = leiMap.get(`${r.uf}|${r.municipio}`);
+                return (
+                  <BarRow
+                    key={`${r.uf}-${r.municipio}`}
+                    label={r.municipio}
+                    value={Number(r.valor_total || 0)}
+                    maxValue={maxValue}
+                    suffix={
+                      <>
+                        <span>
+                          {r.contratos_ativos}/{r.contratos_count} contrato(s) ativo(s) ·{' '}
+                          Medido <span className="font-medium">{brl(Number(r.valor_medido_total || 0))}</span>
+                        </span>
+                        {lei && <Lei14133Badges lei={lei} />}
+                      </>
+                    }
+                  />
+                );
+              })}
             </div>
           </Card>
         );
@@ -299,5 +408,69 @@ function AditivoRow({ a }: { a: AdditiveConsolidated }) {
         <Link to={`/contratos/${a.contract_id}/aditivos/${a.additive_id}`} className="text-navy text-xs hover:underline">Ver</Link>
       </td>
     </tr>
+  );
+}
+
+// =============================================================================
+// V43 — KPIs Lei 14.133 e badges por agrupamento
+// =============================================================================
+
+const KPI_TONE_CLS: Record<'error' | 'warning' | 'purple', string> = {
+  error:   'text-error border-error/30',
+  warning: 'text-yellow-700 dark:text-yellow-300 border-yellow-500/30',
+  purple:  'text-purple-700 dark:text-purple-300 border-purple-500/30',
+};
+
+function Lei14133KpiCell({
+  icon: Icon, label, value, sub, tone,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+  sub?: string;
+  tone: 'error' | 'warning' | 'purple';
+}) {
+  return (
+    <div className={`rounded-lg border bg-white/60 dark:bg-card-dark/60 p-2 ${value > 0 ? KPI_TONE_CLS[tone] : 'border-slate-200 dark:border-border-dark text-slate-600 dark:text-slate-400'}`}>
+      <div className="flex items-center gap-1">
+        <Icon className="h-3 w-3" />
+        <p className="text-[9px] sm:text-[10px] font-mono uppercase tracking-display truncate flex-1">{label}</p>
+      </div>
+      <p className={`mt-0.5 font-mono tabular text-base sm:text-lg font-bold ${value === 0 ? 'opacity-50' : ''}`}>{value}</p>
+      {sub && <p className="font-mono text-[9px] text-slate-500 truncate">{sub}</p>}
+    </div>
+  );
+}
+
+/**
+ * Renderiza badges discretos com os 5 KPIs Lei 14.133 quando >0.
+ * Aparece como linha extra abaixo do suffix da BarRow.
+ */
+function Lei14133Badges({ lei }: { lei: PortfolioLei14133Base }) {
+  type BadgeTone = 'red' | 'yellow' | 'purple';
+  const items = ([
+    { label: 'vícios',         value: lei.vicios_abertos,         tone: 'red'    as BadgeTone },
+    { label: 'PARs',           value: lei.pars_em_curso,          tone: 'purple' as BadgeTone },
+    { label: 'garantias ≤30d', value: lei.garantias_vencendo_30d, tone: 'yellow' as BadgeTone },
+    { label: 'multas',         value: lei.multas_pendentes_count, tone: 'yellow' as BadgeTone },
+    { label: 'graves',         value: lei.sancoes_graves_ativas,  tone: 'red'    as BadgeTone },
+  ]).filter((b) => b.value > 0);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      <span className="text-[10px] font-mono uppercase tracking-display text-slate-400">Lei 14.133:</span>
+      {items.map((b) => (
+        <Badge key={b.label} tone={b.tone}>
+          {b.value} {b.label}
+        </Badge>
+      ))}
+      {lei.contratos_criticos > 0 && (
+        <span className="text-[10px] font-mono text-slate-500">
+          em {lei.contratos_criticos} contrato{lei.contratos_criticos === 1 ? '' : 's'}
+        </span>
+      )}
+    </div>
   );
 }

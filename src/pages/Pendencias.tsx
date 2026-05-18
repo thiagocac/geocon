@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, ClipboardList, Clock,
   FileCheck, Send, Lightbulb, ShieldAlert,
+  Shield, Gavel, Hammer, Download, ScrollText,
 } from 'lucide-react';
 import { getPendencias, type Pendencia } from '../lib/api';
 import { dtTime } from '../lib/format';
@@ -11,6 +12,7 @@ import { Layout } from '../components/layout/Layout';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Empty, Skeleton } from '../components/ui/Stat';
 import { SavedFiltersBar, useDefaultPreset } from '../components/filters/SavedFiltersBar';
 
@@ -23,7 +25,36 @@ const PENDENCIA_META: Record<Pendencia['pendencia_tipo'], { label: string; icon:
                         linkBase: (p) => `/contratos/${p.contract_id}/itens-nao-previstos/${p.entity_id}` },
   risco_alto:         { label: 'Risco financeiro',     icon: <ShieldAlert  className="h-4 w-4 text-error" />,
                         linkBase: (p) => `/contratos/${p.contract_id}/financeiro` },
+  vicio_aberto:       { label: 'Vício em recebimento',  icon: <FileCheck    className="h-4 w-4 text-error" />,
+                        linkBase: (p) => `/contratos/${p.contract_id}/recebimentos` },
+  par_defesa:         { label: 'PAR em defesa',         icon: <Gavel        className="h-4 w-4 text-purple-700 dark:text-purple-300" />,
+                        linkBase: (p) => `/contratos/${p.contract_id}/processos-administrativos` },
+  garantia_vencendo:  { label: 'Garantia vencendo',     icon: <Shield       className="h-4 w-4 text-yellow-700 dark:text-yellow-300" />,
+                        linkBase: (p) => `/contratos/${p.contract_id}/garantias` },
+  sancao_multa_pendente: { label: 'Multa pendente',     icon: <Hammer       className="h-4 w-4 text-error" />,
+                        linkBase: (p) => `/contratos/${p.contract_id}/sancoes` },
+  recebimento_definitivo_atrasado: { label: 'Definitivo atrasado', icon: <FileCheck className="h-4 w-4 text-error" />,
+                        linkBase: (p) => `/contratos/${p.contract_id}/recebimentos` },
 };
+
+// V49: agrupamento visual dos chips de filtro por categoria.
+// "Operação corrente" = tipos clássicos V12. "Lei 14.133" = tipos V35-V38 (migration 047).
+const PENDENCIA_GROUP: Record<Pendencia['pendencia_tipo'], 'operacao' | 'lei14133'> = {
+  medicao_aprovacao: 'operacao',
+  grd_recebimento: 'operacao',
+  unforeseen_analise: 'operacao',
+  risco_alto: 'operacao',
+  vicio_aberto: 'lei14133',
+  par_defesa: 'lei14133',
+  garantia_vencendo: 'lei14133',
+  sancao_multa_pendente: 'lei14133',
+  recebimento_definitivo_atrasado: 'lei14133',
+};
+
+const PENDENCIA_TYPES_ORDER: Pendencia['pendencia_tipo'][] = [
+  'medicao_aprovacao', 'grd_recebimento', 'unforeseen_analise', 'risco_alto',
+  'vicio_aberto', 'par_defesa', 'garantia_vencendo', 'sancao_multa_pendente', 'recebimento_definitivo_atrasado',
+];
 
 const SEVERIDADE_TONE: Record<string, 'slate' | 'yellow' | 'red'> = {
   low:    'slate',
@@ -59,23 +90,74 @@ export function Pendencias() {
     });
   }, [all, filterTipo, filterSeveridade]);
 
-  const counts = useMemo(() => ({
-    total: all.length,
-    high: all.filter((p) => p.severidade === 'high').length,
-    medium: all.filter((p) => p.severidade === 'medium').length,
-    low: all.filter((p) => p.severidade === 'low').length,
-    medicao_aprovacao: all.filter((p) => p.pendencia_tipo === 'medicao_aprovacao').length,
-    grd_recebimento:   all.filter((p) => p.pendencia_tipo === 'grd_recebimento').length,
-    unforeseen_analise: all.filter((p) => p.pendencia_tipo === 'unforeseen_analise').length,
-    risco_alto:        all.filter((p) => p.pendencia_tipo === 'risco_alto').length,
-  }), [all]);
+  const counts = useMemo(() => {
+    const byType = {
+      medicao_aprovacao:               all.filter((p) => p.pendencia_tipo === 'medicao_aprovacao').length,
+      grd_recebimento:                 all.filter((p) => p.pendencia_tipo === 'grd_recebimento').length,
+      unforeseen_analise:              all.filter((p) => p.pendencia_tipo === 'unforeseen_analise').length,
+      risco_alto:                      all.filter((p) => p.pendencia_tipo === 'risco_alto').length,
+      vicio_aberto:                    all.filter((p) => p.pendencia_tipo === 'vicio_aberto').length,
+      par_defesa:                      all.filter((p) => p.pendencia_tipo === 'par_defesa').length,
+      garantia_vencendo:               all.filter((p) => p.pendencia_tipo === 'garantia_vencendo').length,
+      sancao_multa_pendente:           all.filter((p) => p.pendencia_tipo === 'sancao_multa_pendente').length,
+      recebimento_definitivo_atrasado: all.filter((p) => p.pendencia_tipo === 'recebimento_definitivo_atrasado').length,
+    };
+    const operacao_total = byType.medicao_aprovacao + byType.grd_recebimento + byType.unforeseen_analise + byType.risco_alto;
+    const lei14133_total = byType.vicio_aberto + byType.par_defesa + byType.garantia_vencendo + byType.sancao_multa_pendente + byType.recebimento_definitivo_atrasado;
+    return {
+      total: all.length,
+      high: all.filter((p) => p.severidade === 'high').length,
+      medium: all.filter((p) => p.severidade === 'medium').length,
+      low: all.filter((p) => p.severidade === 'low').length,
+      operacao_total,
+      lei14133_total,
+      ...byType,
+    };
+  }, [all]);
+
+  // V49: export CSV das pendências filtradas
+  function exportCsv() {
+    const headers = ['contract_numero', 'pendencia_tipo', 'tipo_label', 'categoria', 'descricao', 'severidade', 'dias_aberta', 'desde'];
+    const lines = [headers.join(';')];
+    for (const p of filtered) {
+      const tipo = p.pendencia_tipo;
+      const row = [
+        p.contract_numero,
+        tipo,
+        PENDENCIA_META[tipo]?.label || tipo,
+        PENDENCIA_GROUP[tipo] === 'lei14133' ? 'Lei 14.133' : 'Operação corrente',
+        `"${p.descricao.replace(/"/g, '""')}"`,
+        p.severidade,
+        String(p.dias_aberta),
+        p.desde,
+      ];
+      lines.push(row.join(';'));
+    }
+    const csv = '\uFEFF' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pendencias_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <Layout>
       <PageHeader
         kicker="Operação · SLA"
         title="Pendências e SLAs"
-        subtitle="Tudo o que requer atenção: medições atrasadas, GRDs sem confirmação, itens não previstos parados e contratos em risco"
+        subtitle="Tudo o que requer atenção: medições, GRDs, itens não previstos, riscos, vícios em recebimento, PARs, garantias, multas e definitivos atrasados"
+        actions={
+          filtered.length > 0 && (
+            <Button variant="outline" onClick={exportCsv}>
+              <Download className="h-4 w-4" />Exportar CSV
+            </Button>
+          )
+        }
       />
 
       <div className="mb-3">
@@ -90,7 +172,7 @@ export function Pendencias() {
         />
       </div>
 
-      {/* KPIs */}
+      {/* KPIs por severidade */}
       <div className="mb-4 grid gap-3 md:grid-cols-4">
         <KPICard label="Total" value={counts.total} icon={<ClipboardList className="h-4 w-4" />} tone="navy" onClick={() => { setFilterTipo(''); setFilterSeveridade(''); }} active={!filterTipo && !filterSeveridade} />
         <KPICard label="Alta severidade" value={counts.high} icon={<AlertCircle className="h-4 w-4" />} tone="red" onClick={() => setFilterSeveridade(filterSeveridade === 'high' ? '' : 'high')} active={filterSeveridade === 'high'} />
@@ -98,24 +180,84 @@ export function Pendencias() {
         <KPICard label="Baixa" value={counts.low} icon={<Clock className="h-4 w-4" />} tone="slate" onClick={() => setFilterSeveridade(filterSeveridade === 'low' ? '' : 'low')} active={filterSeveridade === 'low'} />
       </div>
 
-      {/* Filtros por tipo */}
-      <Card className="mb-4 p-4">
-        <div className="flex flex-wrap gap-2">
-          <FilterChip active={!filterTipo} onClick={() => setFilterTipo('')} count={counts.total}>Todos os tipos</FilterChip>
-          {(Object.keys(PENDENCIA_META) as Pendencia['pendencia_tipo'][]).map((tipo) => {
-            const meta = PENDENCIA_META[tipo];
-            return (
-              <FilterChip
-                key={tipo}
-                active={filterTipo === tipo}
-                onClick={() => setFilterTipo(filterTipo === tipo ? '' : tipo)}
-                count={counts[tipo]}
-                icon={meta.icon}
-              >
-                {meta.label}
-              </FilterChip>
-            );
-          })}
+      {/* V49: KPIs por categoria — operação corrente vs Lei 14.133 */}
+      <div className="mb-4 grid gap-3 md:grid-cols-2">
+        <Card className="p-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-display text-slate-500">
+                Operação corrente
+              </p>
+              <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-300">{counts.operacao_total}</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Medições · GRDs · não previstos · risco financeiro
+              </p>
+            </div>
+            <ClipboardList className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-1" />
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-display text-slate-500">
+                Lei 14.133
+              </p>
+              <p className="mt-1 text-2xl font-bold text-magenta">{counts.lei14133_total}</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Vícios · PARs · garantias · multas · definitivos
+              </p>
+            </div>
+            <ScrollText className="h-5 w-5 text-magenta mt-1" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Filtros por tipo — agrupados visualmente */}
+      <Card className="mb-4 p-4 space-y-3">
+        <FilterChip active={!filterTipo} onClick={() => setFilterTipo('')} count={counts.total}>Todos os tipos</FilterChip>
+
+        <div>
+          <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-display text-blue-700 dark:text-blue-300">
+            Operação corrente
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {PENDENCIA_TYPES_ORDER.filter((t) => PENDENCIA_GROUP[t] === 'operacao').map((tipo) => {
+              const meta = PENDENCIA_META[tipo];
+              return (
+                <FilterChip
+                  key={tipo}
+                  active={filterTipo === tipo}
+                  onClick={() => setFilterTipo(filterTipo === tipo ? '' : tipo)}
+                  count={counts[tipo]}
+                  icon={meta.icon}
+                >
+                  {meta.label}
+                </FilterChip>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-display text-magenta">
+            Lei 14.133
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {PENDENCIA_TYPES_ORDER.filter((t) => PENDENCIA_GROUP[t] === 'lei14133').map((tipo) => {
+              const meta = PENDENCIA_META[tipo];
+              return (
+                <FilterChip
+                  key={tipo}
+                  active={filterTipo === tipo}
+                  onClick={() => setFilterTipo(filterTipo === tipo ? '' : tipo)}
+                  count={counts[tipo]}
+                  icon={meta.icon}
+                >
+                  {meta.label}
+                </FilterChip>
+              );
+            })}
+          </div>
         </div>
       </Card>
 

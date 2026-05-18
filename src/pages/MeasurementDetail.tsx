@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { Download, FileText, Send, ShieldCheck, AlertCircle, CheckCircle2, ChevronDown, ClipboardCopy, History, FilePlus, RefreshCcw, XCircle, Upload, DollarSign } from 'lucide-react';
-import { useState, useEffect, type FormEvent } from 'react';
-import { getMeasurement, listMItems, callFn, copyMeasurementBalance, copyPreviousMeasurement, submitMeasurement, registerPaymentEvent } from '../lib/api';
+import { Download, FileText, Send, ShieldCheck, AlertCircle, CheckCircle2, ChevronDown, ClipboardCopy, History, FilePlus, RefreshCcw, XCircle, Upload, DollarSign, Smartphone } from 'lucide-react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { getMeasurement, listMItems, callFn, copyMeasurementBalance, copyPreviousMeasurement, submitMeasurement, registerPaymentEvent, summarizeMeasurementValidation } from '../lib/api';
 import { brl, num, dt } from '../lib/format';
 import { MEASUREMENT_STATUS, statusFor } from '../lib/status';
 import { humanizeError } from '../lib/errors';
@@ -19,6 +19,7 @@ import { Empty, ErrorState, Skeleton } from '../components/ui/Stat';
 import { GlossesPanel } from '../components/GlossesPanel';
 import { MeasurementLifecycleMenu } from '../components/MeasurementLifecycleMenu';
 import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
+import { ValidationsPanel } from '../components/ValidationsPanel';
 
 export function MeasurementDetail() {
   const { id = '', medId = '' } = useParams();
@@ -57,6 +58,20 @@ export function MeasurementDetail() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['measurement', medId] }); qc.invalidateQueries({ queryKey: ['mitems', medId] }); setSuccess('Validação executada.'); setBusy(null); setErr(null); },
     onError: (e: Error) => { setErr(e.message); setBusy(null); },
   });
+
+  // V54: auto-validate quando medição editável tem items pendentes (mas evita loop:
+  // só roda 1x por sessão por medição via ref). Não roda em medições finais.
+  const autoValidateTriggeredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!m?.id || !items.length) return;
+    if (!['rascunho', 'preliminar', 'devolvida'].includes(m.status)) return;
+    if (autoValidateTriggeredRef.current === m.id) return;
+    const pendingCount = items.filter((it) => it.validacao_status === 'pendente').length;
+    if (pendingCount === 0) return;
+    autoValidateTriggeredRef.current = m.id;
+    validate.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [m?.id, m?.status, items]);
 
   const generatePdf = useMutation({
     mutationFn: (variant: string) => callFn<{ storage_path: string; validation_url: string }>('generate-measurement-pdf', { measurement_id: medId, variant }),
@@ -117,6 +132,9 @@ export function MeasurementDetail() {
 
   const status = statusFor(m.status, MEASUREMENT_STATUS);
   const isPreliminar = !['emitida', 'aprovada', 'paga'].includes(m.status);
+  // V54: bloqueia submit quando há item com validacao_status='bloqueado'
+  const validationSummary = summarizeMeasurementValidation(items);
+  const submitBlocked = validationSummary.bloqueados > 0;
 
   return (
     <Layout>
@@ -131,6 +149,12 @@ export function MeasurementDetail() {
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
             {isPreliminar && (
               <>
+                <Link to="campo">
+                  <Button variant="outline" size="sm" title="Apontamento mobile-first em obra">
+                    <Smartphone className="h-4 w-4" />
+                    Campo
+                  </Button>
+                </Link>
                 <Button variant="outline" size="sm" loading={busy === 'copy-balance'}
                         onClick={() => { setBusy('copy-balance'); copyBalance.mutate(); }}
                         title="Insere itens com o saldo restante de cada linha do contrato">
@@ -151,8 +175,11 @@ export function MeasurementDetail() {
             </Button>
             {['rascunho', 'preliminar', 'devolvida'].includes(m.status) && (
               <Button variant="secondary" loading={busy === 'submit'}
+                      disabled={submitBlocked}
                       onClick={() => { setBusy('submit'); submit.mutate(); }}
-                      title="Submete o boletim para o fluxo de aprovação">
+                      title={submitBlocked
+                        ? `Não é possível emitir: ${validationSummary.bloqueados} item(ns) com validação bloqueada.`
+                        : 'Submete o boletim para o fluxo de aprovação'}>
                 <Upload className="h-4 w-4" />
                 Emitir
               </Button>
@@ -276,6 +303,15 @@ export function MeasurementDetail() {
         <Card className="px-4 py-3"><p className="text-xs uppercase text-slate-500 dark:text-slate-400">Valor líquido</p><p className="text-xl font-bold tabular dark:text-slate-100">{brl(m.valor_liquido)}</p></Card>
         <Card className="px-4 py-3"><p className="text-xs uppercase text-slate-500 dark:text-slate-400">Glosas</p><p className="text-xl font-bold tabular text-error">{brl(m.valor_glosado)}</p></Card>
         <Card className="px-4 py-3"><p className="text-xs uppercase text-slate-500 dark:text-slate-400">Retenções</p><p className="text-xl font-bold tabular text-warning">{brl(m.valor_retido)}</p></Card>
+      </div>
+
+      <div className="mb-4">
+        <ValidationsPanel
+          items={items}
+          onRevalidate={() => { setBusy('validate'); validate.mutate(); }}
+          isRevalidating={busy === 'validate' || validate.isPending}
+          disabled={['emitida', 'aprovada', 'paga', 'cancelada', 'retificada'].includes(m.status)}
+        />
       </div>
 
       <Card className="overflow-hidden">

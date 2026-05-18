@@ -1,7 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { AlertTriangle, MapPin, Plus, ShieldCheck, WalletCards, LineChart, ClipboardList, Briefcase, PieChart, TrendingUp, ShieldAlert } from 'lucide-react';
-import { listContracts, getPendencias, getTenantSummary, getPortfolioByProgram, listTopCriticalContracts, getTenantRiskTrend, type TopCriticalContract, type TenantRiskTrendPoint } from '../lib/api';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle, MapPin, Plus, ShieldCheck, WalletCards, LineChart, ClipboardList, Briefcase, PieChart, TrendingUp, ShieldAlert,
+  FileText, Layers, Scale, AlertOctagon, FileCheck, Shield, Gavel, Hammer, Activity, Calendar, ChevronRight, Clock, ArrowUpRight,
+} from 'lucide-react';
+import {
+  listContracts, getPendencias, getTenantSummary, getPortfolioByProgram,
+  listTopCriticalContracts, getTenantRiskTrend,
+  getTenantDashboard, TENANT_DASHBOARD_ALERT_LABELS, tenantDashboardAlertSeverity,
+  TIMELINE_KIND_LABELS, timelineSeverityTone, dashboardDueTone,
+  type TopCriticalContract, type TenantRiskTrendPoint,
+  type TenantDashboard, type TenantDashboardAlertKey,
+  type TenantDashboardNextDate, type TenantDashboardRecentEvent, type TimelineEventKind,
+} from '../lib/api';
 import { brl, num } from '../lib/format';
 import { CONTRACT_STATUS, statusFor } from '../lib/status';
 import { Layout } from '../components/layout/Layout';
@@ -13,6 +24,7 @@ import { StatusPill } from '../components/ui/StatusPill';
 import { Button } from '../components/ui/Button';
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const { data = [], isLoading, isError, error } = useQuery({
     queryKey: ['contracts'],
     queryFn: listContracts,
@@ -31,6 +43,9 @@ export function Dashboard() {
   });
   const { data: riskTrend = [] } = useQuery({
     queryKey: ['tenant-risk-trend'], queryFn: () => getTenantRiskTrend(30),
+  });
+  const { data: tenantDash } = useQuery({
+    queryKey: ['tenant-dashboard'], queryFn: getTenantDashboard,
   });
 
   const total = data.reduce((s, c) => s + c.valor_atual, 0);
@@ -60,6 +75,9 @@ export function Dashboard() {
           </>
         }
       />
+
+      {/* V43: Alertas Lei 14.133 cross-contract */}
+      {tenantDash && <TenantAlerts dash={tenantDash} />}
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -94,6 +112,16 @@ export function Dashboard() {
           />
         </Link>
       </div>
+
+      {/* V43: Status agregado Lei 14.133 + Próximos vencimentos */}
+      {tenantDash && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <TenantAxisGrid dash={tenantDash} />
+          </div>
+          <TenantNextDates dash={tenantDash} />
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card className="overflow-hidden lg:col-span-2">
@@ -390,5 +418,282 @@ function PortfolioRiskTrend({ data }: { data: TenantRiskTrendPoint[] }) {
       {/* Ponto final destacado */}
       <circle cx={xAt(data.length - 1)} cy={yAt(data[data.length - 1].avg_score)} r={2.5} fill="#7e22ce" stroke="white" strokeWidth={1} />
     </svg>
+  );
+}
+
+// =============================================================================
+// V43 — Tenant Dashboard sub-components
+// =============================================================================
+
+const TENANT_KIND_ICONS: Record<TimelineEventKind, React.ComponentType<{ className?: string }>> = {
+  additive:     FileText,
+  unforeseen:   ClipboardList,
+  measurement:  Layers,
+  reajuste:     TrendingUp,
+  repactuacao:  Scale,
+  reequilibrio: AlertOctagon,
+  receipt:      FileCheck,
+  guarantee:    Shield,
+  par:          Gavel,
+  sanction:     Hammer,
+};
+
+function fmtDateBR(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso + (iso.length === 10 ? 'T00:00:00Z' : ''));
+  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+}
+function brlShortV43(n: number | null | undefined): string {
+  if (n === null || n === undefined || !isFinite(Number(n))) return '—';
+  const v = Number(n);
+  if (Math.abs(v) >= 1e6) return `R$ ${(v / 1e6).toFixed(1).replace('.', ',')}M`;
+  if (Math.abs(v) >= 1e3) return `R$ ${(v / 1e3).toFixed(1).replace('.', ',')}k`;
+  return `R$ ${v.toFixed(2).replace('.', ',')}`;
+}
+
+// ---- Alerts banner ---------------------------------------------------------
+function TenantAlerts({ dash }: { dash: TenantDashboard }) {
+  const navigate = useNavigate();
+  const alertKeys: TenantDashboardAlertKey[] = [
+    'vicios_graves',
+    'garantias_7d',
+    'par_procedente_sem_sancao',
+    'par_prazo_defesa_vencido',
+    'multas_grandes_pendentes',
+  ];
+  const active = alertKeys.filter((k) => dash.alerts[k].count > 0);
+
+  if (active.length === 0) return null;
+
+  return (
+    <div className="mt-6 mb-2">
+      <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-display text-slate-500">
+        Alertas Lei 14.133 · carteira inteira
+      </p>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {active.map((key) => {
+          const a = dash.alerts[key];
+          const label = TENANT_DASHBOARD_ALERT_LABELS[key];
+          const severity = tenantDashboardAlertSeverity(key);
+          const sample = 'contracts' in a ? a.contracts.slice(0, 3) : [];
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                if ('contracts' in a && a.contracts.length === 1) {
+                  navigate(`/contratos/${a.contracts[0].id}/${label.link}`);
+                } else {
+                  navigate('/timeline');
+                }
+              }}
+              className={`group flex w-full items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-opacity hover:opacity-90 ${
+                severity === 'danger'
+                  ? 'border-error/40 bg-error/5 text-error'
+                  : 'border-yellow-300/50 bg-yellow-50 text-yellow-900 dark:border-yellow-900/40 dark:bg-yellow-900/15 dark:text-yellow-200'
+              }`}
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold flex items-baseline gap-1.5">
+                  <span className="font-mono tabular text-base">{a.count}</span>
+                  <span className="opacity-80">{label.title}</span>
+                </p>
+                {'total_valor' in a && a.total_valor > 0 && (
+                  <p className="mt-0.5 font-mono text-[11px] tabular opacity-70">
+                    Total: {brlShortV43(a.total_valor)}
+                  </p>
+                )}
+                {'contracts' in a && sample.length > 0 && (
+                  <p className="mt-0.5 font-mono text-[10px] opacity-70 truncate">
+                    {sample.map((c) => `#${c.numero}`).join(' · ')}
+                    {a.contracts.length > 3 && ` +${a.contracts.length - 3}`}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 opacity-60 transition-transform group-hover:translate-x-0.5" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---- Axis grid -------------------------------------------------------------
+function TenantAxisGrid({ dash }: { dash: TenantDashboard }) {
+  const navigate = useNavigate();
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-slate-100 px-5 py-4 dark:border-border-dark">
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100">Lei 14.133 — status agregado</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          9 institutos somados em toda a carteira · {dash.recent_activity.events_30d.toLocaleString('pt-BR')} eventos nos últimos 30d
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-px bg-slate-100 dark:bg-border-dark/50 sm:grid-cols-4">
+        <AxisTile icon={FileText}     label="Aditivos"      onClick={() => navigate('/contratos')}
+          stats={[
+            { label: 'Aprovados', value: dash.per_axis.aditivo.aprovados, tone: 'success' },
+            { label: 'Em aprovação', value: dash.per_axis.aditivo.em_aprovacao, tone: 'warning' },
+          ]}
+          footer={brlShortV43(dash.per_axis.aditivo.valor_liquido_total)}
+        />
+        <AxisTile icon={TrendingUp}   label="Reajustes"     onClick={() => navigate('/timeline?kinds=reajuste')}
+          stats={[
+            { label: 'Regras ativas', value: dash.per_axis.reajuste.rules_active },
+            { label: 'Aplicados', value: dash.per_axis.reajuste.events_total, tone: 'success' },
+          ]}
+          footer={brlShortV43(dash.per_axis.reajuste.delta_total)}
+        />
+        <AxisTile icon={Scale}        label="Repactuações"  onClick={() => navigate('/timeline?kinds=repactuacao')}
+          stats={[
+            { label: 'Eventos', value: dash.per_axis.repactuacao.events_total, tone: 'success' },
+          ]}
+          footer={brlShortV43(dash.per_axis.repactuacao.delta_total)}
+        />
+        <AxisTile icon={AlertOctagon} label="Reequilíbrios" onClick={() => navigate('/timeline?kinds=reequilibrio')}
+          stats={[
+            { label: 'Em curso', value: dash.per_axis.reequilibrio.open, tone: 'warning' },
+            { label: 'Aplicados', value: dash.per_axis.reequilibrio.aplicado, tone: 'success' },
+          ]}
+        />
+        <AxisTile icon={FileCheck}    label="Recebimentos"  onClick={() => navigate('/timeline?kinds=receipt')}
+          stats={[
+            { label: 'Provisórios', value: dash.per_axis.recebimento.provisorios_emitidos },
+            { label: 'Definitivos', value: dash.per_axis.recebimento.definitivos_emitidos, tone: 'success' },
+            { label: 'Vícios', value: dash.per_axis.recebimento.vicios_abertos, tone: dash.per_axis.recebimento.vicios_abertos > 0 ? 'error' : 'default' },
+          ]}
+        />
+        <AxisTile icon={Shield}       label="Garantias"     onClick={() => navigate('/timeline?kinds=guarantee')}
+          stats={[
+            { label: 'Ativas', value: dash.per_axis.garantia.ativas, tone: 'success' },
+          ]}
+          footer={`${brlShortV43(dash.per_axis.garantia.valor_disponivel)} disp.`}
+        />
+        <AxisTile icon={Gavel}        label="PARs"          onClick={() => navigate('/timeline?kinds=par')}
+          stats={[
+            { label: 'Em curso', value: dash.per_axis.par.em_andamento, tone: 'warning' },
+            { label: 'Procedentes', value: dash.per_axis.par.procedentes, tone: dash.per_axis.par.procedentes > 0 ? 'error' : 'default' },
+            { label: 'Prazo venc.', value: dash.per_axis.par.prazo_estourado, tone: dash.per_axis.par.prazo_estourado > 0 ? 'error' : 'default' },
+          ]}
+        />
+        <AxisTile icon={Hammer}       label="Sanções"       onClick={() => navigate('/timeline?kinds=sanction')}
+          stats={[
+            { label: 'Ativas', value: dash.per_axis.sancao.ativas, tone: dash.per_axis.sancao.ativas > 0 ? 'error' : 'default' },
+            { label: 'Imped./Inid.', value: dash.per_axis.sancao.impedimento_inidoneidade_ativos, tone: dash.per_axis.sancao.impedimento_inidoneidade_ativos > 0 ? 'error' : 'default' },
+          ]}
+          footer={dash.per_axis.sancao.multa_pendente > 0 ? `${brlShortV43(dash.per_axis.sancao.multa_pendente)} pendente` : undefined}
+        />
+      </div>
+    </Card>
+  );
+}
+
+type AxisStatTone = 'default' | 'success' | 'warning' | 'error';
+function AxisTile({
+  icon: Icon, label, stats, footer, onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  stats: Array<{ label: string; value: number; tone?: AxisStatTone }>;
+  footer?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex flex-col bg-white p-3 text-left transition-colors hover:bg-slate-50 dark:bg-card-dark dark:hover:bg-muted-dark/40"
+    >
+      <div className="mb-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+          <p className="text-xs font-semibold dark:text-slate-200">{label}</p>
+        </div>
+        <ArrowUpRight className="h-3 w-3 text-slate-300 transition-colors group-hover:text-magenta" />
+      </div>
+      <dl className="space-y-0.5 text-[11px]">
+        {stats.map((s) => (
+          <div key={s.label} className="flex items-center justify-between">
+            <dt className="text-slate-500 dark:text-slate-400 truncate">{s.label}</dt>
+            <dd className={`font-mono tabular font-semibold ${
+              s.tone === 'success' ? 'text-success' :
+              s.tone === 'warning' ? 'text-yellow-600 dark:text-yellow-300' :
+              s.tone === 'error'   ? 'text-error' :
+                                     'dark:text-slate-200'
+            }`}>
+              {s.value.toLocaleString('pt-BR')}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {footer && (
+        <p className="mt-1.5 pt-1.5 border-t border-slate-100 dark:border-border-dark/50 font-mono text-[10px] text-slate-500 truncate">
+          {footer}
+        </p>
+      )}
+    </button>
+  );
+}
+
+// ---- Next dates da carteira ------------------------------------------------
+function TenantNextDates({ dash }: { dash: TenantDashboard }) {
+  const navigate = useNavigate();
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-border-dark">
+        <div>
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Próximos vencimentos</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">top 10 da carteira</p>
+        </div>
+        <Calendar className="h-4 w-4 text-slate-400" />
+      </div>
+      {dash.next_dates.length === 0 ? (
+        <div className="px-5 py-8 text-center">
+          <Clock className="mx-auto h-6 w-6 text-success/60" />
+          <p className="mt-2 text-xs text-slate-500">Nenhum vencimento próximo na carteira</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100 dark:divide-border-dark max-h-96 overflow-y-auto">
+          {dash.next_dates.map((d, i) => (
+            <NextDateLineV43
+              key={`${d.kind}-${d.contract_id}-${i}`}
+              d={d}
+              onClick={() => navigate(`/contratos/${d.contract_id}${d.link}`)}
+            />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function NextDateLineV43({ d, onClick }: { d: TenantDashboardNextDate; onClick: () => void }) {
+  const tone = dashboardDueTone(d.days_until);
+  const toneColor =
+    tone === 'red'    ? 'text-error' :
+    tone === 'yellow' ? 'text-yellow-600 dark:text-yellow-300' :
+    tone === 'blue'   ? 'text-blue-600 dark:text-blue-300' :
+                        'text-slate-500';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-start gap-2 px-4 py-2 text-left hover:bg-slate-50 dark:hover:bg-muted-dark/30"
+    >
+      <Clock className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 ${toneColor}`} />
+      <div className="flex-1 min-w-0">
+        <p className="flex items-center gap-1.5 text-xs">
+          <span className="font-mono font-bold text-magenta">#{d.contract_numero}</span>
+          <span className="font-medium dark:text-slate-200 line-clamp-1">{d.label}</span>
+        </p>
+        <p className="font-mono text-[10px] text-slate-500 truncate">
+          {d.contract_titulo} · {fmtDateBR(d.due_date)}
+        </p>
+      </div>
+      <span className={`font-mono tabular text-xs font-bold ${toneColor} flex-shrink-0`}>{d.days_until}d</span>
+      <ChevronRight className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-300 transition-colors group-hover:text-magenta" />
+    </button>
   );
 }

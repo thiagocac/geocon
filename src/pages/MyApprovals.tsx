@@ -178,6 +178,7 @@ export function MyApprovals() {
 
       {filtered.length > 0 && (
         <Card className="overflow-hidden">
+          <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-muted-dark dark:text-slate-400">
               <tr>
@@ -242,6 +243,7 @@ export function MyApprovals() {
               })}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 

@@ -186,6 +186,7 @@ export interface Notification {
   link?: string | null;
   read_at?: string | null;
   kind?: string;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 }
 

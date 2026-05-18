@@ -4,6 +4,7 @@ import {
   Plus, Search, FolderTree, Send, Download, Tag, BookOpen,
   Pencil, Trash2, ChevronRight, ChevronDown, Layers, Save,
   FileText, History, ShieldCheck, Eye, FileUp, ScanText, Printer,
+  CalendarClock, GitCompare, BarChart3, Stamp,
 } from 'lucide-react';
 import { useState, useMemo, type FormEvent } from 'react';
 import {
@@ -14,7 +15,8 @@ import {
   upsertGedControlledTermValue, deleteGedControlledTermValue,
   listGedMasterList, getGedDocument, listGedDocumentVersions,
   listGedAccessLog, getGedDocumentUrl, logGedAccess, updateGedDocumentStatus,
-  extractTextFromVersion, printGedLabels,
+  extractTextFromVersion, printGedLabels, updateGedDocumentValidity,
+  gedValidityStatus, type GedValidityStatus,
   type GedCategory, type GedMetadataField, type GedControlledTerm, type GedControlledTermValue,
   type GedDocument as GedDocumentType, type GedDocumentVersion,
 } from '../../lib/api';
@@ -30,6 +32,9 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Field, Select } from '../../components/ui/FormField';
 import { Empty, Skeleton } from '../../components/ui/Stat';
+import { GedValidityBadge } from '../../components/ged/GedValidityBadge';
+import { WatermarkDownloadModal } from '../../components/ged/WatermarkDownloadModal';
+import { getGedWatermarkSettings } from '../../lib/api';
 
 const GED_STATUS_OPTIONS = [
   { value: 'em_elaboracao', label: 'Em elaboração' },
@@ -47,6 +52,7 @@ export function Ged() {
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterValidity, setFilterValidity] = useState<GedValidityStatus | ''>('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [labelsBusy, setLabelsBusy] = useState(false);
@@ -59,7 +65,7 @@ export function Ged() {
   }, [search]);
 
   const { data: cats = [] } = useQuery({ queryKey: ['ged-cats'], queryFn: listGedCategories });
-  const { data = [], isLoading } = useQuery({
+  const { data: rawData = [], isLoading } = useQuery({
     queryKey: ['ged-master', filterCategory, filterStatus, debouncedSearch],
     queryFn: () => listGedMasterList({
       categoryId: filterCategory || null,
@@ -67,6 +73,13 @@ export function Ged() {
       query: debouncedSearch || null,
     }),
   });
+  // V56: filtragem cliente por status de validade (regra derivada — não vai ao backend)
+  const data = useMemo(() => {
+    if (!filterValidity) return rawData;
+    return rawData.filter((d) =>
+      gedValidityStatus(d.dias_para_vencimento, d.dias_alerta_antes) === filterValidity
+    );
+  }, [rawData, filterValidity]);
 
   function toggleOne(id: string) {
     setSelectedIds((cur) => {
@@ -106,6 +119,10 @@ export function Ged() {
         subtitle="Documentos do contrato, versionamento, distribuição (GRD) e exportação"
         actions={
           <>
+            <Link to="dashboard"><Button variant="outline"><BarChart3 className="h-4 w-4" />Painel</Button></Link>
+            <Link to="configuracoes/marca-dagua" title="Configurar marca d'água">
+              <Button variant="ghost"><Stamp className="h-4 w-4" /></Button>
+            </Link>
             <Link to="categorias"><Button variant="outline"><FolderTree className="h-4 w-4" />Taxonomia</Button></Link>
             <Link to="termos"><Button variant="outline"><BookOpen className="h-4 w-4" />Termos</Button></Link>
             <Link to="distribuicao"><Button variant="outline"><Send className="h-4 w-4" />GRDs</Button></Link>
@@ -115,7 +132,7 @@ export function Ged() {
       />
 
       <Card className="mb-4 p-4">
-        <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto]">
+        <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -137,6 +154,18 @@ export function Ged() {
             onChange={(e) => setFilterStatus(e.target.value)}
             placeholder="Todos os status"
             options={GED_STATUS_OPTIONS}
+          />
+          <Select
+            value={filterValidity}
+            onChange={(e) => setFilterValidity(e.target.value as GedValidityStatus | '')}
+            placeholder="Toda validade"
+            options={[
+              { value: 'sem_validade',     label: 'Sem validade' },
+              { value: 'ok',               label: 'Vigentes' },
+              { value: 'vencendo',         label: 'Vencendo (≤30d)' },
+              { value: 'vencendo_critico', label: 'Vencendo · crítico (≤7d)' },
+              { value: 'vencido',          label: 'Vencidos' },
+            ]}
           />
           <Button variant="outline" onClick={() => callFn('generate-databook-export', {})}>
             <Download className="h-4 w-4" />Exportar
@@ -174,7 +203,7 @@ export function Ged() {
       {!isLoading && data.length === 0 && (
         <Empty
           title="Nenhum documento"
-          body={debouncedSearch || filterCategory || filterStatus
+          body={debouncedSearch || filterCategory || filterStatus || filterValidity
             ? 'Nenhum resultado para os filtros aplicados.'
             : 'Cadastre o primeiro documento da GED.'}
         />
@@ -209,7 +238,15 @@ export function Ged() {
                     </td>
                     <td className="font-mono text-xs">{d.nomenclature_code || d.numero || '—'}</td>
                     <td className="max-w-xs">
-                      <div className="truncate font-medium">{d.title}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1 truncate font-medium">{d.title}</div>
+                        <GedValidityBadge
+                          dias_para_vencimento={d.dias_para_vencimento}
+                          dias_alerta_antes={d.dias_alerta_antes}
+                          data_validade={d.data_validade}
+                          compact
+                        />
+                      </div>
                       {d.description && <div className="truncate text-xs text-slate-500">{d.description}</div>}
                     </td>
                     <td>
@@ -961,6 +998,19 @@ export function GedDocument() {
   const nav = useNavigate();
   const qc = useQueryClient();
 
+  // V56: modal de validade
+  const [validityOpen, setValidityOpen] = useState(false);
+  const [watermarkOpen, setWatermarkOpen] = useState(false);
+
+  const { data: watermarkSettings } = useQuery({
+    queryKey: ['ged-watermark-settings'],
+    queryFn: getGedWatermarkSettings,
+    staleTime: 5 * 60_000,
+  });
+  const [validityDate, setValidityDate] = useState('');
+  const [validityDays, setValidityDays] = useState(30);
+  const [validityErr, setValidityErr] = useState<string | null>(null);
+
   const { data: doc, isLoading } = useQuery({
     queryKey: ['ged-doc', docId],
     queryFn: () => getGedDocument(docId),
@@ -987,6 +1037,30 @@ export function GedDocument() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ged-doc', docId] }),
   });
 
+  // V56: mutation para set/clear validade
+  const updateValidity = useMutation({
+    mutationFn: (input: { data_validade: string | null; dias_alerta_antes: number }) =>
+      updateGedDocumentValidity({
+        document_id: docId,
+        data_validade: input.data_validade,
+        dias_alerta_antes: input.dias_alerta_antes,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ged-doc', docId] });
+      qc.invalidateQueries({ queryKey: ['ged-master'] });
+      setValidityOpen(false);
+      setValidityErr(null);
+    },
+    onError: (e: Error) => setValidityErr(humanizeError(e)),
+  });
+
+  function openValidityModal() {
+    setValidityDate(doc?.data_validade ?? '');
+    setValidityDays(doc?.dias_alerta_antes ?? 30);
+    setValidityErr(null);
+    setValidityOpen(true);
+  }
+
   async function downloadVersion(version: GedDocumentVersion) {
     const url = await getGedDocumentUrl(version.storage_path);
     if (!url) { alert('Não foi possível gerar URL de download'); return; }
@@ -1008,7 +1082,30 @@ export function GedDocument() {
         backTo="/ged" backLabel="GED"
         actions={
           <>
+            <Button variant="outline" onClick={openValidityModal}
+                    title="Definir ou limpar data de validade do documento">
+              <CalendarClock className="h-4 w-4" />Validade
+            </Button>
             <Link to="nova-revisao"><Button variant="outline"><FileUp className="h-4 w-4" />Nova revisão</Button></Link>
+            {versions.length >= 2 && (
+              <Link to="diff" title="Comparar texto extraído entre 2 revisões">
+                <Button variant="outline"><GitCompare className="h-4 w-4" />Comparar revisões</Button>
+              </Link>
+            )}
+            {versions.length > 0 && (
+              <Button variant="outline" onClick={() => setWatermarkOpen(true)}
+                      title="Baixar PDF com marca d'água 'CÓPIA NÃO CONTROLADA' + fingerprint rastreável">
+                <Stamp className="h-4 w-4" />Marca d'água
+              </Button>
+            )}
+            <Link to="marca-dagua-log" title="Histórico de downloads com marca d'água">
+              <Button variant="ghost"><History className="h-4 w-4" /></Button>
+            </Link>
+            {versions.some((v) => v.status === 'em_aprovacao') && (
+              <Link to="aprovar" title="Workflow de aprovação da revisão pendente">
+                <Button><ShieldCheck className="h-4 w-4" />Aprovar revisão</Button>
+              </Link>
+            )}
             {doc.status === 'em_elaboracao' && (
               <Button onClick={() => changeStatus.mutate('em_revisao')} loading={changeStatus.isPending}>
                 Enviar para revisão
@@ -1040,7 +1137,18 @@ export function GedDocument() {
                 <h2 className="mt-1 text-lg font-semibold dark:text-slate-100">{doc.title}</h2>
                 {doc.description && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{doc.description}</p>}
               </div>
-              <StatusPill tone={st.tone}>{st.label}</StatusPill>
+              <div className="flex flex-col items-end gap-2">
+                <StatusPill tone={st.tone}>{st.label}</StatusPill>
+                {doc.data_validade && (
+                  <GedValidityBadge
+                    dias_para_vencimento={
+                      Math.ceil((new Date(doc.data_validade + 'T00:00:00').getTime() - Date.now()) / 86_400_000)
+                    }
+                    dias_alerta_antes={doc.dias_alerta_antes}
+                    data_validade={doc.data_validade}
+                  />
+                )}
+              </div>
             </div>
 
             <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
@@ -1203,6 +1311,74 @@ export function GedDocument() {
           )}
         </Card>
       </div>
+
+      {/* V56: Modal de validade temporal */}
+      <Modal
+        open={validityOpen}
+        onClose={() => setValidityOpen(false)}
+        title="Validade temporal do documento"
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Define quando este documento expira. O sistema gerará alertas em tempo real
+          quando estiver próximo do vencimento.
+        </p>
+        <div className="mt-4 space-y-3">
+          <Field label="Data de validade">
+            <input
+              type="date"
+              value={validityDate}
+              onChange={(e) => setValidityDate(e.target.value)}
+              className="input"
+            />
+          </Field>
+          <Field label="Avisar X dias antes do vencimento" hint="entre 0 e 365 · padrão 30">
+            <input
+              type="number"
+              min={0} max={365}
+              value={validityDays}
+              onChange={(e) => setValidityDays(Number(e.target.value) || 30)}
+              className="input"
+              disabled={!validityDate}
+            />
+          </Field>
+        </div>
+        {validityErr && (
+          <p className="mt-3 text-xs text-error">{validityErr}</p>
+        )}
+        <div className="mt-5 flex items-center justify-between gap-2">
+          {doc.data_validade ? (
+            <Button
+              variant="ghost"
+              onClick={() => updateValidity.mutate({ data_validade: null, dias_alerta_antes: 30 })}
+              loading={updateValidity.isPending}
+            >
+              Limpar validade
+            </Button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setValidityOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => updateValidity.mutate({
+                data_validade: validityDate || null,
+                dias_alerta_antes: validityDays,
+              })}
+              loading={updateValidity.isPending}
+              disabled={!validityDate}
+            >
+              <Save className="h-4 w-4" />Salvar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <WatermarkDownloadModal
+        open={watermarkOpen}
+        onClose={() => setWatermarkOpen(false)}
+        versionId={versions.find((v) => v.status === 'vigente')?.id ?? versions[0]?.id ?? null}
+        versionRevision={versions.find((v) => v.status === 'vigente')?.revision ?? versions[0]?.revision}
+        docTitle={doc.title}
+        defaultSettings={watermarkSettings}
+      />
     </Layout>
   );
 }

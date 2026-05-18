@@ -38,6 +38,9 @@ export function GedUploadWizard() {
   const [file, setFile] = useState<File | null>(null);
   const [keywords, setKeywords] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // V57: validade temporal opcional
+  const [dataValidade, setDataValidade] = useState('');
+  const [diasAlertaAntes, setDiasAlertaAntes] = useState(30);
 
   const { data: categories = [], isLoading: loadingCats } = useQuery({
     queryKey: ['ged-cats'], queryFn: listGedCategories,
@@ -66,6 +69,8 @@ export function GedUploadWizard() {
       file: file!,
       keywords: keywords.trim() ? keywords.split(',').map((k) => k.trim()).filter(Boolean) : [],
       metadata,
+      data_validade: dataValidade || null,
+      dias_alerta_antes: diasAlertaAntes,
     }),
     onSuccess: (docId) => nav(`/ged/documentos/${docId}`),
     onError: (e) => setError(humanizeError(e)),
@@ -135,6 +140,8 @@ export function GedUploadWizard() {
           revision={revision} setRevision={setRevision}
           file={file} setFile={setFile}
           keywords={keywords} setKeywords={setKeywords}
+          dataValidade={dataValidade} setDataValidade={setDataValidade}
+          diasAlertaAntes={diasAlertaAntes} setDiasAlertaAntes={setDiasAlertaAntes}
         />
       )}
 
@@ -357,7 +364,10 @@ function MetadataInput({ field, terms, value, onChange }: {
   );
 }
 
-function Step3({ category, revision, setRevision, file, setFile, keywords, setKeywords }: {
+function Step3({
+  category, revision, setRevision, file, setFile, keywords, setKeywords,
+  dataValidade, setDataValidade, diasAlertaAntes, setDiasAlertaAntes,
+}: {
   category: GedCategory;
   revision: string;
   setRevision: (v: string) => void;
@@ -365,6 +375,10 @@ function Step3({ category, revision, setRevision, file, setFile, keywords, setKe
   setFile: (f: File | null) => void;
   keywords: string;
   setKeywords: (v: string) => void;
+  dataValidade: string;
+  setDataValidade: (v: string) => void;
+  diasAlertaAntes: number;
+  setDiasAlertaAntes: (v: number) => void;
 }) {
   return (
     <Card className="p-5">
@@ -404,6 +418,32 @@ function Step3({ category, revision, setRevision, file, setFile, keywords, setKe
             </label>
           </div>
         </Field>
+
+        {/* V57: validade temporal opcional — útil para ARTs, licenças, ASOs etc */}
+        <details className="rounded-lg border border-slate-200 px-4 py-3 dark:border-border-dark">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200">
+            Validade temporal (opcional) — para ARTs, licenças, ASOs, certidões
+          </summary>
+          <div className="mt-3 grid gap-4 sm:grid-cols-[2fr_1fr]">
+            <Field label="Data de validade" hint="Deixe vazio se o documento não expira">
+              <input type="date" value={dataValidade}
+                     onChange={(e) => setDataValidade(e.target.value)}
+                     className="input" />
+            </Field>
+            <Field label="Avisar X dias antes" hint="0-365 · padrão 30">
+              <input type="number" min={0} max={365}
+                     value={diasAlertaAntes}
+                     onChange={(e) => setDiasAlertaAntes(Number(e.target.value) || 30)}
+                     className="input"
+                     disabled={!dataValidade} />
+            </Field>
+          </div>
+          {dataValidade && (
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              O sistema gerará alertas em tempo real quando faltar ≤ {diasAlertaAntes} dias para o vencimento.
+            </p>
+          )}
+        </details>
 
         {category.requires_physical_original && (
           <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-900 dark:border-yellow-900/40 dark:bg-yellow-900/10 dark:text-yellow-200">

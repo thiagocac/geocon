@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
   FileSpreadsheet, Calculator, PenLine, WalletCards, LineChart, FileText,
-  Plus, MapPin, Calendar, Building2, Users as UsersIcon, Edit3, Layers, AlertCircle, ShieldAlert,
+  Plus, MapPin, Calendar, Building2, Users as UsersIcon, Edit3, Layers, AlertCircle, ShieldAlert, TrendingUp, Scale, AlertOctagon, FileCheck, Shield, Gavel, Hammer, Activity, Gauge,
 } from 'lucide-react';
 import { getContract, getSaldoAlert } from '../lib/api';
 import { brl, num, dt } from '../lib/format';
@@ -60,9 +60,18 @@ export function ContractDetail() {
   const status = statusFor(c.status, CONTRACT_STATUS);
 
   const modules: Array<[string, string, typeof FileSpreadsheet, string]> = [
+    ['Dashboard',      'dashboard',          Gauge,           'Visão executiva · alertas · ações pendentes'],
+    ['Linha do tempo', 'timeline',           Activity,        'Eventos cronológicos · 9 institutos'],
     ['Planilha SOV',  'planilha',             FileSpreadsheet, 'Itens, preços, saldo'],
     ['Medições',      'medicoes',             Calculator,      'Boletins por período'],
     ['Aditivos',      'aditivos',             PenLine,         'Valor, prazo, itens'],
+    ['Reajustes',     'reajustes',            TrendingUp,      'Reajuste anual por índice'],
+    ['Repactuações',  'repactuacoes',         Scale,           'CCT, convenção, mão-de-obra'],
+    ['Reequilíbrios', 'reequilibrios',        AlertOctagon,    'Evento extraordinário, art. 124'],
+    ['Recebimentos',  'recebimentos',         FileCheck,       'Provisório, definitivo, vícios, garantia'],
+    ['Garantias',     'garantias',            Shield,          'Caução, seguro, fiança · art. 96-101'],
+    ['Apuração administrativa', 'processos-administrativos', Gavel, 'PAR · art. 158'],
+    ['Sanções',       'sancoes',              Hammer,          'Advertência, multa, impedimento · art. 156'],
     ['Itens não previstos','itens-nao-previstos', Plus,        'Aprovação prévia'],
     ['Financeiro',    'financeiro',           WalletCards,     'Curva S, pagamentos'],
     ['Cronograma',    'cronograma',           LineChart,       'Físico-financeiro'],

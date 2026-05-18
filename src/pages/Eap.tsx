@@ -123,6 +123,7 @@ export function Eap() {
           )}
 
           <Card className="overflow-hidden">
+            <div className="overflow-x-auto scrollbar-thin">
             <table className="table">
               <thead><tr>
                 <th></th>
@@ -188,6 +189,7 @@ export function Eap() {
                 })}
               </tbody>
             </table>
+            </div>
           </Card>
         </>
       )}

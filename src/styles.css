@@ -90,13 +90,13 @@
     @apply bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-muted-dark dark:text-slate-400;
   }
   .table th {
-    @apply px-3 py-2.5 font-semibold;
+    @apply px-2 py-2 font-semibold sm:px-3 sm:py-2.5;
   }
   .table tbody tr {
     @apply border-t border-slate-100 dark:border-border-dark;
   }
   .table td {
-    @apply px-3 py-2.5;
+    @apply px-2 py-2 sm:px-3 sm:py-2.5;
   }
 
   /* Card / surface */
@@ -182,4 +182,19 @@
 .touch-target {
   min-height: 44px;
   min-width: 44px;
+}
+
+/* V52 — Toast realtime alerts slide-in animation */
+@keyframes geocon-toast-in {
+  from {
+    transform: translateX(1.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.toast-realtime-enter {
+  animation: geocon-toast-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }

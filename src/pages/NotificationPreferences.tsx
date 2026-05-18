@@ -48,6 +48,12 @@ const EVENTS: EventMeta[] = [
   { key: 'digest_daily',
     label: 'Resumo diário (opt-in)',
     description: 'E-mail diário consolidado com pendências, decisões e indicadores' },
+  { key: 'workflow_assignment',
+    label: 'Revisão GED aguardando minha aprovação',
+    description: 'Você é aprovador em workflow de revisão de documento GED (V65)' },
+  { key: 'workflow_decided',
+    label: 'Revisão GED que enviei foi decidida',
+    description: 'Aprovação, devolução ou reprovação de revisão de documento sua' },
 ];
 
 const CHANNELS: Array<{ key: NotificationChannel; label: string; icon: typeof Bell; hint: string }> = [

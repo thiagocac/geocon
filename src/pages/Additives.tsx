@@ -143,6 +143,7 @@ export function Additives() {
 
       {additives.length > 0 && (
         <Card className="overflow-hidden">
+          <div className="overflow-x-auto scrollbar-thin">
           <table className="table">
             <thead>
               <tr>
@@ -177,6 +178,7 @@ export function Additives() {
               })}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 
