@@ -127,6 +127,12 @@ geocon-final/
 
 ---
 
+## V76 — release notes resumo
+
+Detalhes em `docs/release-v76.md`.
+
+**Hotfix tela branca pós-deploy** — corrige bug latente desde V62: o Service Worker mantinha `CACHE_NAME = 'geocon-v62'` constante em todas as versões, fazendo `/config.js` (sem hash) ficar grudado no cache do navegador para sempre. Após qualquer deploy com config alterada, usuários antigos viam tela branca silenciosa. V76 versiona o cache name, faz bypass network-only para arquivos sem hash, adiciona boot loader inline em `index.html` e `BootErrorBoundary` global no `main.tsx` — qualquer crash no boot agora mostra tela de erro com botão "Limpar cache e recarregar". Sem feature nova.
+
 ## V75 — release notes resumo
 
 Detalhes em `docs/release-v75.md`.

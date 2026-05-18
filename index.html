@@ -13,9 +13,136 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <title>Consulte GEO — Gestão de Contratos</title>
     <meta name="description" content="Plataforma de administração contratual, medição, evidência e auditoria. Família Consulte GEO." />
+    <!-- V76: estilos do boot loader inline (antes do bundle JS).
+         Garantem feedback visual imediato e tela de erro caso o bundle
+         não monte. Limpos pelo React quando o app renderiza. -->
+    <style>
+      #geocon-boot {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 16px;
+        background: #f8fafc;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #475569;
+      }
+      @media (prefers-color-scheme: dark) {
+        #geocon-boot { background: #0f172a; color: #94a3b8; }
+      }
+      #geocon-boot .mark {
+        width: 48px; height: 48px;
+        border: 3px solid #e2e8f0; border-top-color: #182863;
+        border-radius: 50%;
+        animation: gc-spin 0.9s linear infinite;
+      }
+      #geocon-boot .label {
+        font-size: 13px; letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      #geocon-boot.is-error .mark {
+        animation: none;
+        border-color: #fca5a5;
+        border-top-color: #dc2626;
+      }
+      #geocon-boot .err-box {
+        max-width: 420px;
+        text-align: center;
+        padding: 0 24px;
+      }
+      #geocon-boot .err-title {
+        font-size: 16px; font-weight: 600;
+        color: #dc2626; margin-bottom: 8px;
+      }
+      #geocon-boot .err-detail {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 11px; color: #64748b;
+        white-space: pre-wrap; word-break: break-word;
+        max-height: 180px; overflow: auto;
+        background: rgba(0,0,0,0.04); padding: 8px 12px;
+        border-radius: 6px; text-align: left;
+      }
+      #geocon-boot .err-actions {
+        margin-top: 16px; display: flex; gap: 8px; justify-content: center;
+      }
+      #geocon-boot button {
+        font: inherit; font-size: 13px;
+        padding: 8px 16px; border-radius: 6px;
+        border: 1px solid #cbd5e1; background: white; color: #475569;
+        cursor: pointer;
+      }
+      #geocon-boot button:hover { background: #f1f5f9; }
+      @keyframes gc-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <!-- V76: boot loader inline. Aparece IMEDIATAMENTE (antes do bundle JS).
+         O main.tsx remove esse elemento assim que o React monta.
+         Se o bundle falhar em montar, o handler de erro abaixo converte
+         este loader em uma tela de erro visível com botão de recarga. -->
+    <div id="geocon-boot">
+      <div class="mark"></div>
+      <div class="label">Carregando geoCon</div>
+    </div>
+    <script>
+      // V76: captura erros antes do React montar e converte o boot loader
+      // em uma tela de erro visível. Sem isso, qualquer crash síncrono no
+      // bundle resulta em tela branca silenciosa.
+      (function () {
+        var boot = document.getElementById('geocon-boot');
+        var failed = false;
+        function escapeMsg(s) {
+          return String(s).replace(/[<>&]/g, function (c) {
+            return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c];
+          });
+        }
+        function showError(msg) {
+          if (failed || !boot) return;
+          failed = true;
+          boot.classList.add('is-error');
+          boot.innerHTML =
+            '<div class="mark"></div>' +
+            '<div class="err-box">' +
+              '<div class="err-title">Não foi possível carregar o app</div>' +
+              '<div class="err-detail">' + escapeMsg(msg) + '</div>' +
+              '<div class="err-actions">' +
+                '<button onclick="location.reload()">Recarregar</button>' +
+                '<button id="geocon-reset">Limpar cache e recarregar</button>' +
+              '</div>' +
+            '</div>';
+          var btn = document.getElementById('geocon-reset');
+          if (btn) btn.onclick = async function () {
+            try {
+              if (navigator.serviceWorker) {
+                var rs = await navigator.serviceWorker.getRegistrations();
+                for (var i = 0; i < rs.length; i++) await rs[i].unregister();
+              }
+              if (window.caches) {
+                var ks = await caches.keys();
+                for (var j = 0; j < ks.length; j++) await caches.delete(ks[j]);
+              }
+            } catch (e) { /* ignore */ }
+            location.reload();
+          };
+        }
+        window.addEventListener('error', function (e) {
+          // Ignora erros de extensão/3p que não impedem boot
+          if (e.filename && !e.filename.includes(location.host) && !e.filename.startsWith('/')) return;
+          showError(e.message || 'Erro desconhecido');
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason;
+          showError((r && (r.stack || r.message)) || String(r));
+        });
+        // Timeout de segurança: se em 15s o React não removeu o loader,
+        // mostra opção de recarga (provável bundle preso ou rede travada).
+        setTimeout(function () {
+          if (document.getElementById('geocon-boot') && !failed) {
+            showError('Tempo limite de carregamento (15s). Verifique sua conexão.');
+          }
+        }, 15000);
+      })();
+    </script>
     <!-- O plugin inject-runtime-config insere a tag de configuração de runtime aqui -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
